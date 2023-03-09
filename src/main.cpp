@@ -18,11 +18,16 @@ const char *mqtt_server = "https://app.ivcariot.com";
 const char *wifi_ssid = "Fibertel WiFi129 2.4GHz";
 const char *wifi_password = "0041491096";
 
-// FUNCTION DEFINITIONS
+// Function Definitions
 void clear();
 bool getMqttCredentiales();
-
+void checkMqttConnection();
+bool reconnect();
+// Instances
+WiFiClient wifiClient;
+PubSubClient client(wifiClient);
 DynamicJsonDocument mqtt_data_doc(2048);
+
 
 void setup()
 {
@@ -59,12 +64,74 @@ void setup()
   Serial.print("\n\n         Local IP -> ");
   Serial.print(boldBlue + WiFi.localIP() + fontReset);
 
-  getMqttCredentiales();
+
 }
 
 void loop()
 {
+  checkMqttConnection();
+
 }
+
+bool reconnect(){
+  if(!getMqttCredentiales()){
+    Serial.println(boldRed + "\n\n      Error getting mqtt credentials :( \n\n RESTARTING IN 10 SECONDS");
+    Serial.println(fontReset);
+    delay(10000);
+    ESP.restart();
+    return false;
+  }
+
+  client.setServer("app.ivcariot.com",1883);
+  Serial.print(underlinePurple + "\n\n\nTrying MQTT Connection" + fontReset + Purple + "  ⤵");
+  String str_clientId = "device_" + dId + "_" + random(1,9999);
+  const char* username = mqtt_data_doc["username"];
+  const char* password = mqtt_data_doc["password"];
+  String str_topic = mqtt_data_doc["topic"];
+
+  if(client.connect(str_clientId.c_str(),username,password)){
+    Serial.print(boldGreen + "\n\n         Mqtt Client Connected :) " + fontReset);
+    delay(2000);
+    client.subscribe((str_topic + "+/actdata").c_str());
+    return true;
+
+  }
+
+  return false;
+  Serial.print(boldRed + "\n\n         Mqtt Client Connection Failed :( " + fontReset);
+
+
+
+
+}
+
+long lastReconnectAttempt=0;
+
+void checkMqttConnection(){
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.print(Red + "\n\n         Ups WiFi Connection Failed :( ");
+    Serial.println(" -> Restarting..." + fontReset);
+    delay(15000);
+    ESP.restart(); // es como llamar al setup nuevamente
+  }
+
+  if(!client.connected()){
+    long now = millis();
+    
+    if(now - lastReconnectAttempt > 5000){
+      lastReconnectAttempt=millis();
+
+      if(reconnect()){
+        lastReconnectAttempt=0;
+      }
+    }
+  }else{
+    client.loop();
+  }
+
+}
+
 bool getMqttCredentiales()
 {
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
@@ -104,6 +171,7 @@ bool getMqttCredentiales()
 
   return false;
 }
+
 
 void clear()
 {
