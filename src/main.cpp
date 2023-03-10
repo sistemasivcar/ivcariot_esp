@@ -20,7 +20,7 @@ String webhook_pass = "uwOvotZDpH";
 String webhook_url = "http://192.168.0.8:3001/api/webhook/getdevicecredentials";
 const char *mqtt_server = "192.168.0.8";
 
-
+int flag_led_status = 0;
 
 // PINS
 #define led 2
@@ -32,18 +32,22 @@ const char *wifi_password = "0041491096";
 // const char *wifi_ssid = "WIFI_IVCAR";
 // const char *wifi_password = "Gaston2001";
 
-// Function Definitions
+// Function Definitions TEMPLATE
 void clear();
 bool getMqttCredentiales();
 void checkMqttConnection();
 bool reconnect();
-void processSensors();
-void processActuators();
 void sendToBroker();
 void callback(char* topic, byte* payload, unsigned int length);
 void processIncomingMsg(String topic, String incoming);
 void print_stats();
 void reportPresence();
+
+// Functiones Definitions APPLICATION
+void processSensors();
+void processActuators();
+void publicData(boolean value);
+
 
 // Instances
 WiFiClient wifiClient;
@@ -108,6 +112,17 @@ void loop()
 
 void processSensors(){
 
+  int led_status = digitalRead(led);
+
+  if(led_status == 1 && flag_led_status==0){
+    publicData(digitalRead(led)==HIGH);
+    flag_led_status=1;
+  }
+  if(led_status == 0 && flag_led_status==1){
+    publicData(digitalRead(led)==HIGH);
+    flag_led_status=0;
+  }
+
   // get temp simulation
   int temp = random(1,100);
   // get hum simulation
@@ -118,9 +133,6 @@ void processSensors(){
 
   mqtt_data_doc["variables"][1]["last"]["value"]=hum;
   mqtt_data_doc["variables"][1]["last"]["save"]=1;
-
-  mqtt_data_doc["variables"][2]["last"]["value"] = (digitalRead(2)==HIGH);
-  mqtt_data_doc["variables"][2]["last"]["save"] = 1;
 
 }
 
@@ -139,7 +151,18 @@ void processActuators(){
 
 }
 
+void publicData(boolean value){
 
+  String root_topic = mqtt_data_doc["topic"];
+  String variable = mqtt_data_doc["variables"][2]["variable"];
+  String topic = root_topic + variable + "/sdata";
+
+  String toSend = "";
+  mqtt_data_doc["variables"][2]["last"]["value"] = value; // true/false
+  mqtt_data_doc["variables"][2]["last"]["save"] = 1;
+  serializeJson(mqtt_data_doc["variables"][2]["last"], toSend);
+  client.publish(topic.c_str(),toSend.c_str(),true);
+}
 /* -------- TEMPLATE TASKS -------- */
 
 void reportPresence(){
@@ -196,8 +219,10 @@ void sendToBroker(){
   long now = millis();
 
   for(int i = 0; i < mqtt_data_doc["variables"].size(); i++){
+    String variableType = mqtt_data_doc["variables"][i]["variableType"];
+    String sendMethod = mqtt_data_doc["variables"][i]["sendMethod"];
 
-    if(mqtt_data_doc["variables"][i]["variableType"]=="output"){
+    if(variableType=="output" || (variableType=="input" && sendMethod=="change_status")){
       continue;
     }
     // "input" variable type
@@ -294,7 +319,7 @@ void checkMqttConnection(){
     client.loop();
     processSensors();
     sendToBroker();
-    //print_stats();
+    print_stats();
   }
 
 }
