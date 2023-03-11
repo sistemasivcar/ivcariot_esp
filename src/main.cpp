@@ -46,7 +46,7 @@ void processActuators();
 void publicData(boolean value);
 
 // Instances
-WiFiClient espClient; // me sirve para usar la conexion wifi 
+WiFiClient espClient;           // me sirve para usar la conexion wifi
 PubSubClient client(espClient); // se la paso a PubSubClient para que se conecte
 DynamicJsonDocument mqtt_data_doc(2048);
 DynamicJsonDocument presence(350);
@@ -59,36 +59,40 @@ void setup()
   Serial.begin(921600);
   pinMode(led, OUTPUT);
 
-  Serial.print(underlinePurple + "\n\nWiFi Connection in Progress" + fontReset + Purple);
+  bool wifiConnectionSuccess;
+  wm.setConnectTimeout(20);
+  wm.setConfigPortalTimeout(120); // duracion del AP
 
-  WiFi.begin(wifi_ssid, wifi_password);
+  // Web Styles
+  wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
+  wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
+  wm.setShowInfoErase(false);      // do not show erase button on info page
+  wm.setScanDispPerc(true);        // show RSSI as percentage not graph icons
 
-  int counter = 0;
+  wm.setTitle("IVCAR IoT");
+  wm.setCustomHeadElement("Device Managment - IvcarIoT"); 
 
-  // Trying WIFi Connection
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-    counter++;
+  /*   autoConnect: tries to connect to a previously saved Access Point.
+  if this is unsuccessful (or no previous network saved) it moves the ESP into Access Point mode
+   and spins up a DNS and WebServer (default ip 192.168.4.1)
+ */  
+  
+  wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking 
 
-    if (counter > 20)
-    {
-      Serial.print("  ⤵" + fontReset);
-      Serial.print(Red + "\n\n         Ups WiFi Connection Failed :( ");
-      Serial.println(fontReset);
-      delay(3000);
-      break;
-    }
+  // saved wifi - quit webportal - timeout expired
+
+  if (wifiConnectionSuccess){
+    Serial.println(Green + "WIFI SUCCESS" + fontReset);
+    wifi_ssid=wm.getWiFiSSID().c_str();
+    wifi_password=wm.getWiFiPass().c_str();
+  }
+  else{
+    Serial.println(Red + "WIFI FAIL" + fontReset);
+    wifi_ssid=wm.getWiFiSSID().c_str();
+    wifi_password=wm.getWiFiPass().c_str();
   }
 
-  // WIFi Connection Success
-  Serial.print("  ⤵" + fontReset);
-  Serial.print(boldGreen + "\n\n         WiFi Connection -> SUCCESS :)" + fontReset);
-  Serial.print("\n\n         Local IP -> ");
-  Serial.print(boldBlue + WiFi.localIP() + fontReset);
-
-  client.setServer(mqtt_server,mqtt_port);
+  client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
   client.setKeepAlive(120); // 5 mins
 }
@@ -97,6 +101,8 @@ void loop()
 {
   checkWiFiConnection();
   checkMqttConnection();
+
+
   delay(2000);
   Serial.println(WiFi.status());
 }
@@ -255,22 +261,22 @@ void sendToBroker()
   }
 }
 
-
-long lastRequestCredentilasAttempt=0;
+long lastRequestCredentilasAttempt = 0;
 bool reconnect()
 {
 
-    long now = millis();
-    if(now - lastRequestCredentilasAttempt > 5000){
-      lastRequestCredentilasAttempt = millis();
-      if(!getMqttCredentiales()) {
+  long now = millis();
+  if (now - lastRequestCredentilasAttempt > 5000)
+  {
+    lastRequestCredentilasAttempt = millis();
+    if (!getMqttCredentiales())
+    {
       Serial.println(boldRed + "\n\n      Error getting mqtt credentials :( \n\n NEW ATTEMPT IN 5 SECONDS");
-      Serial.println(fontReset); 
+      Serial.println(fontReset);
       return false;
-      }
     }
-  
-  
+  }
+
   Serial.print(underlinePurple + "\n\n\nTrying MQTT Connection" + fontReset + Purple + "  ⤵");
   String str_clientId = "device_" + dId;
   const char *username = mqtt_data_doc["username"];
@@ -299,17 +305,21 @@ bool reconnect()
   return false;
 }
 
-long lastWiFiConnectionAttempt=0;
+long lastWiFiConnectionAttempt = 0;
 
-void checkWiFiConnection(){
-  if (WiFi.status() != WL_CONNECTED){
-    
+void checkWiFiConnection()
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
+
     long now = millis();
-    if(now - lastWiFiConnectionAttempt > 15000){
+    if (now - lastWiFiConnectionAttempt > 30000)
+    {
       lastWiFiConnectionAttempt = millis();
       Serial.print(Red + "\n\n         Ups WiFi Connection Failed :( ");
-      Serial.print(underlinePurple + "\n\nTrying Connection Again...");
-      WiFi.begin(wifi_ssid,wifi_password);
+      Serial.print(underlinePurple + "\n\nTrying Connection Again to:" + fontReset);
+      Serial.print(wm.getWiFiSSID());
+      WiFi.begin(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str()); 
     }
   }
 }
@@ -327,10 +337,11 @@ void checkMqttConnection()
     {
       // hago el el proximo intento sea en 5 segundos
       lastMqttReconnectAttempt = millis();
-      if (reconnect()) {
-      // si me logre conectar pero mas tarde se cae la conexion,
-      // entonces voy a intentar la conexion inmediatamente
-      lastMqttReconnectAttempt = 0;
+      if (reconnect())
+      {
+        // si me logre conectar pero mas tarde se cae la conexion,
+        // entonces voy a intentar la conexion inmediatamente
+        lastMqttReconnectAttempt = 0;
       }
     }
   }
@@ -339,7 +350,7 @@ void checkMqttConnection()
     client.loop();
     processSensors();
     sendToBroker();
-    //print_stats();
+    // print_stats();
   }
 }
 
@@ -376,7 +387,7 @@ bool getMqttCredentiales()
     Serial.print(boldGreen + "\n\n         Mqtt Credentials Obtained Successfully :) " + fontReset);
     http.end();
     deserializeJson(mqtt_data_doc, response_body);
-    mqtt_data_doc["obtained"]="yes";
+    mqtt_data_doc["obtained"] = "yes";
     delay(2000);
     return true;
   }
