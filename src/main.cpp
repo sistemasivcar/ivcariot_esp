@@ -9,29 +9,32 @@
 #include <Ticker.h>
 
 // include MDNS
-#ifdef ESP8266
-#include <ESP8266mDNS.h>
-#elif defined(ESP32)
-#include <ESPmDNS.h>
-#endif
+// #ifdef ESP8266
+// #include <ESP8266mDNS.h>
+// #elif defined(ESP32)
+// #include <ESPmDNS.h>
+// #endif
 
-int mqtt_port = 1883;
+int mqtt_port=1883;
+
 /* String dId = "5555";
 String webhook_pass = "OpCHrljrjW";
 String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
-const char *mqtt_server = "app.ivcariot.com";
+const char *mqtt_host = "app.ivcariot.com";
  */
 
-String dId = "7777";
-String webhook_pass = "uwOvotZDpH";
 String webhook_url = "http://192.168.0.8:3001/api/webhook/getdevicecredentials";
-const char *mqtt_server = "192.168.0.8";
+String dId = "7777";
+String webhook_pass = "uwOvotZDpH"; //uwOvotZDpH
+const char *mqtt_host = "192.168.0.8";
 
+// FLAGS
 int flag_led_status = 0;
 
 // PINS
-#define led 2
+#define CONNECTIVITY_STATUS 2
 #define TRIGGER_PIN 4
+#define ESTADO_ALARMA 5
 
 // WIFI
 
@@ -46,14 +49,18 @@ void callback(char *topic, byte *payload, unsigned int length);
 void processIncomingMsg(String topic, String incoming);
 void print_stats();
 void reportPresence();
-void doWiFiManager();
+void setupMqttClient();
+void setupWiFiManagerClient();
+void inizialice();
+void checkEnterAP();
+void saveParamCallback();
+void getParam();
 void changeStatusLed();
 
 // Functiones Definitions APPLICATION
 void processSensors();
 void processActuators();
 void publicData(boolean value);
-
 
 // Instances
 WiFiClient espClient;           // me sirve para usar la conexion wifi
@@ -62,72 +69,36 @@ DynamicJsonDocument mqtt_data_doc(2048);
 DynamicJsonDocument presence(350);
 IoTicosSplitter splitter;
 WiFiManager wm;
+WiFiManagerParameter custom_param_mqtt_port;
+WiFiManagerParameter custom_param_mqtt_host;
+WiFiManagerParameter custom_param_whpassword;
+WiFiManagerParameter custom_param_dId;
 Ticker ticker;
-
 
 void setup()
 {
-  clear();
   Serial.begin(921600);
-  pinMode(led, OUTPUT);
+  clear();
+  Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
+  pinMode(CONNECTIVITY_STATUS, OUTPUT);
   pinMode(ESTADO_ALARMA, OUTPUT);
+  pinMode(TRIGGER_PIN, INPUT_PULLUP);
+  digitalWrite(ESTADO_ALARMA, HIGH);
 
-  bool wifiConnectionSuccess;
-  wm.setConnectTimeout(20);
-  wm.setConfigPortalTimeout(120); // duracion del AP
-  wm.setBreakAfterConfig(true); // always exit configportal even if wifi save fails
-  wm.setEnableConfigPortal(false); // if true (default) then start the config portal from autoConnect if connection failed
-  // Web Styles
-  wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
-  wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
-  wm.setShowInfoErase(false);      // do not show erase button on info page
-  wm.setScanDispPerc(true);        // show RSSI as percentage not graph icons
+  setupWiFiManagerClient();
+  inizialice();
 
-  wm.setTitle("IVCAR IoT");
-  wm.setCustomHeadElement("Device Managment - IvcarIoT"); 
+  Serial.print(backgroundGreen + "\n\n LOOP RUNNING...");
 
-  /*   autoConnect: tries to connect to a previously saved Access Point.
-  if this is unsuccessful (or no previous network saved) it moves the ESP into Access Point mode
-   and spins up a DNS and WebServer (default ip 192.168.4.1)
- */  
-
-  if(wm.getWiFiIsSaved()){
-    // SI tengo credenciales guardadas, WIFiManager intenta conectarse durante 20 segundos
-    ticker.attach(0.7,changeStatusLed);
-    wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
-    ticker.detach(); 
-  }else{
-    // SI no tengo credenciales guardadas WIFiManager entra en modo AP automaticamente
-    ticker.attach(0.2,changeStatusLed);
-    wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
-    ticker.detach();
-  }
-
-  // saved wifi - quit webportal - timeout expired
-
-  if (wifiConnectionSuccess){
-    Serial.println(Green + "WIFI SUCCESS" + fontReset);
-    digitalWrite(led,HIGH);
-  }
-  else{
-    Serial.println(Red + "WIFI FAIL" + fontReset);
-    digitalWrite(led,LOW);
-  }
-
-  client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(callback);
-  client.setKeepAlive(120); // 5 mins
 }
 
 void loop()
 {
-  doWiFiManager();
+
+  checkEnterAP();
   checkWiFiConnection();
   checkMqttConnection();
 
-
-  delay(2000);
-  Serial.println(WiFi.status());
 }
 
 /* -------- APPLICATION TASKS -------- */
@@ -135,16 +106,16 @@ void loop()
 void processSensors()
 {
 
-  int led_status = digitalRead(led);
+  int led_status = digitalRead(ESTADO_ALARMA);
 
   if (led_status == 1 && flag_led_status == 0)
   {
-    publicData(digitalRead(led) == HIGH);
+    publicData(digitalRead(ESTADO_ALARMA) == HIGH);
     flag_led_status = 1;
   }
   if (led_status == 0 && flag_led_status == 1)
   {
-    publicData(digitalRead(led) == HIGH);
+    publicData(digitalRead(ESTADO_ALARMA) == HIGH);
     flag_led_status = 0;
   }
 
@@ -166,13 +137,13 @@ void processActuators()
   if (mqtt_data_doc["variables"][3]["last"]["value"] == "on_led")
   {
 
-    digitalWrite(led, HIGH);
+    digitalWrite(ESTADO_ALARMA, HIGH);
     mqtt_data_doc["variables"][3]["last"]["value"] = "";
   }
   else if (mqtt_data_doc["variables"][4]["last"]["value"] == "off_led")
   {
 
-    digitalWrite(led, LOW);
+    digitalWrite(ESTADO_ALARMA, LOW);
     mqtt_data_doc["variables"][4]["last"]["value"] = "";
   }
 }
@@ -192,21 +163,156 @@ void publicData(boolean value)
 }
 
 /* -------- TEMPLATE TASKS -------- */
-void changeStatusLed(){
-  digitalWrite(led,!digitalRead(led));
+
+void setupMqttClient(){
+
+  /* We configure parameters for the MQTT instance */
+
+  client.setServer(mqtt_host, mqtt_port);
+  client.setCallback(callback);
+  client.setKeepAlive(120); 
+
 }
 
-void doWiFiManager(){ 
+void setupWiFiManagerClient(){
 
-  // is configuration portal requested?
-  if(digitalRead(TRIGGER_PIN) == LOW) {
-    ticker.attach(0.1, changeStatusLed);
-    Serial.println("Button Pressed (loop blocked), Starting AP");
-    wm.startConfigPortal("IvcarIoT"); // blocking 
-    // save - exit - timeout 
+  /* We configure parameters for the WiFiManager instance */
+  wm.setDebugOutput(false);
+  wm.setConnectTimeout(20);
+  wm.setCountry("AR");
+  wm.setConfigPortalTimeout(120);  // duracion del AP
+  wm.setBreakAfterConfig(true);    // always exit configportal even if wifi save fails
+  wm.setEnableConfigPortal(false); // if true (default) then start the config portal from autoConnect if connection failed
+  // Web Styles
+  wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
+  wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
+  wm.setShowInfoErase(false);      // do not show erase button on info page
+  wm.setScanDispPerc(true);        // show RSSI as percentage not graph icons
+
+  wm.setTitle("IVCAR IoT");
+  wm.setCustomHeadElement("Device Managment - IvcarIoT");
+
+  // test custom html(radio)
+  const char *mqtt_port_input_str = "<br/><label for='mqttportid'>MQTT PORT</label><input type='text' name='mqttportid' value='1883'>";
+  const char *mqtt_host_input_str = "<br/><label for='mqtthostid'>MQTT HOST</label><input type='text' name='mqtthostid' value='192.168.0.8'>";
+  const char *mqtt_did_input_str = "<br/><label for='deviceid'>DEVICE ID</label><input type='text' name='deviceid' placeholder='Enter your own dId'>";
+  const char *mqtt_whpassword_input_str = "<br/><label for='whpasswordid'>DEVICE PASSWORD</label><input type='text' name='whpasswordid' placeholder='Enter the password'>";
+  new (&custom_param_mqtt_port) WiFiManagerParameter(mqtt_port_input_str); // custom HTML input
+  new (&custom_param_mqtt_host) WiFiManagerParameter(mqtt_host_input_str);
+  new (&custom_param_dId) WiFiManagerParameter(mqtt_did_input_str);
+  new (&custom_param_whpassword) WiFiManagerParameter(mqtt_whpassword_input_str);
+
+  wm.addParameter(&custom_param_mqtt_port);
+  wm.addParameter(&custom_param_mqtt_host);
+  wm.addParameter(&custom_param_dId);
+  wm.addParameter(&custom_param_whpassword);
+  wm.setSaveParamsCallback(saveParamCallback);
+  std::vector<const char *> menu = {"wifi", "info", "param", "sep", "restart", "exit"};
+  wm.setMenu(menu);
+
+}
+
+void inizialice(){
+
+  /* Aca hacemos el primer intento de conexion WIFI. Si hay credenciales guardadas, 
+  inicia la conexion con eso. Si no nunca se configuraron las credenciales entra
+  en modo AP. En ambos casos si la conexion falla, seguimos intentado (de forma no bloqueante)
+  en el loop */
+
+  bool wifiConnectionSuccess;
+
+  /* Necesito este if/else unicamente para cambiar el comportamiento del
+  LED. Si indica que el esp está en modo AP o intentando conexion WIFI */
+
+  if (wm.getWiFiIsSaved()){
+
+    Serial.print(underlinePurple + "\n\nWiFi Connection in Progress..." + fontReset + Purple);
+    // try to connect with the last SSID and PASSWORD saved
+    
+    ticker.attach(0.7, changeStatusLed);
+    wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
+    ticker.detach();
+  }
+  else{
+    
+    // SI no tengo credenciales guardadas WIFiManager entra en modo AP automaticamente
+    Serial.print(underlinePurple + "\n\nNo Previous WIFI Credentials Saved" + Purple);
+    Serial.print("  ⤵" + fontReset);
+    Serial.print(boldGreen + "\n\n         Access Point Started:" + fontReset);
+    Serial.print("\nSSID: IvcarIoT");
+    Serial.print("\nPASS: 12345678");
+    ticker.attach(0.2, changeStatusLed);
+    wifiConnectionSuccess = wm.autoConnect("IvcarIoT","12345678"); // blocking
     ticker.detach();
   }
 
+  /* Para este punto, salió del modo AP bloqueante ya sea porque el usuario guardó credenciales,
+  salio del portal, o se cumplió el tiempo limite de estar en modo AP que son 120 seg (timeout).
+  La libreria me retoran un boolean diciendo si se pudo conectar o no.*/
+
+  if (wifiConnectionSuccess)
+  {
+    Serial.print("  ⤵" + fontReset);
+    Serial.print(boldGreen + "\n\n         WiFi Connection SUCCESS :)" + fontReset);
+    digitalWrite(CONNECTIVITY_STATUS, HIGH);    
+  }
+  else
+  {
+    Serial.print("  ⤵" + fontReset);
+    Serial.print(Red + "\n\n         Ups WiFi Connection Failed :( " + fontReset);
+    digitalWrite(CONNECTIVITY_STATUS, LOW);
+  }
+
+
+}
+
+void changeStatusLed()
+{
+  digitalWrite(CONNECTIVITY_STATUS, !digitalRead(CONNECTIVITY_STATUS));
+}
+
+String getParam(String name)
+{
+  // read parameter from server, for customhmtl input
+  String value;
+  if (wm.server->hasArg(name))
+  {
+    value = wm.server->arg(name);
+  }
+  return value;
+}
+
+void saveParamCallback()
+{
+  /* Callback triggerd whenever the user save
+  the setup page. Capture the data and save it in global
+  variables to use later */
+
+  dId = getParam("deviceid");
+  webhook_pass = getParam("whpasswordid");
+  mqtt_host = getParam("mqtthostid").c_str();
+  mqtt_port = getParam("mqttportid").toInt();
+}
+
+void checkEnterAP()
+{
+  /* Check permanently if user triggerd the button
+  to enter AP MODE. Only exit this status if user click on
+  save - exit - or timout expiress, otherwire the loop is blocked */
+  if (digitalRead(TRIGGER_PIN) == LOW)
+  {
+    Serial.print(backgroundRed + "\n\nLOOP BLOCKED" + fontReset);
+    Serial.print(boldYellow + "\n\nAccess Point Started:");
+    Serial.print("  ⤵" + fontReset);
+    Serial.print(boldWhite + "\nSSID:" + fontReset + "IvcarIoT");
+    Serial.print(boldWhite + "\nPASS:" + fontReset + "12345678");
+    ticker.attach(0.1, changeStatusLed);
+
+    wm.startConfigPortal("IvcarIoT"); // loop is blocked
+
+    ticker.detach();
+    Serial.print(backgroundGreen + "\n\nLOOP RUNNING..." + fontReset);
+  }
 }
 
 void reportPresence()
@@ -218,7 +324,7 @@ void reportPresence()
   presence["online"]["name"] = mqtt_data_doc["device_name"];
   serializeJson(presence["online"], toSend);
   client.publish(topic.c_str(), toSend.c_str(), true);
-  Serial.print(boldGreen + "\n\n Presence Message Send!" + fontReset);
+  Serial.print(boldGreen + "\n\n          ¡DEVICE ONLINE!" + fontReset);
 }
 
 String last_received_topic = "";
@@ -316,6 +422,7 @@ bool reconnect()
     }
   }
 
+  setupMqttClient();
   Serial.print(underlinePurple + "\n\n\nTrying MQTT Connection" + fontReset + Purple + "  ⤵");
   String str_clientId = "device_" + dId;
   const char *username = mqtt_data_doc["username"];
@@ -350,19 +457,21 @@ void checkWiFiConnection()
 {
   if (WiFi.status() != WL_CONNECTED)
   {
-    digitalWrite(led,LOW);
+    digitalWrite(CONNECTIVITY_STATUS, LOW);
 
     long now = millis();
     if (now - lastWiFiConnectionAttempt > 30000)
     {
       lastWiFiConnectionAttempt = millis();
       Serial.print(Red + "\n\n         Ups WiFi Connection Failed :( ");
-      Serial.print(underlinePurple + "\n\nTrying Connection Again to:" + fontReset);
-      Serial.print(wm.getWiFiSSID());
-      WiFi.begin(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str()); 
+      Serial.print(underlinePurple + "\n\nTrying Connection Again to: ");
+      Serial.print(underlineWhite + boldWhite + wm.getWiFiSSID()+fontReset);
+      WiFi.begin(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str());
     }
-  }else{
-    digitalWrite(led,HIGH);
+  }
+  else
+  {
+    digitalWrite(CONNECTIVITY_STATUS, HIGH);
   }
 }
 
@@ -392,7 +501,7 @@ void checkMqttConnection()
     client.loop();
     //processSensors();
     sendToBroker();
-    // print_stats();
+    //print_stats();
   }
 }
 
@@ -409,21 +518,19 @@ bool getMqttCredentiales()
   // syncronous http request
   int response_code = http.POST(toSend);
 
-  if (response_code < 0)
-  {
+  if (response_code < 0){
     Serial.print(boldRed + "\n\n         Error Sending Post Request :( " + fontReset);
     http.end();
     return false;
   }
 
-  if (response_code != 200)
-  {
+  else if (response_code != 200){
     Serial.print(boldRed + "\n\n         Error in response :(   e-> " + fontReset + " " + response_code);
     http.end();
     return false;
   }
 
-  if (response_code == 200)
+  else if (response_code == 200)
   {
     String response_body = http.getString(); // JSON format
     Serial.print(boldGreen + "\n\n         Mqtt Credentials Obtained Successfully :) " + fontReset);
