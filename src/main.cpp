@@ -9,22 +9,33 @@
 #include <IoTicosSplitter.h>
 #include <Ticker.h>
 
-int mqtt_port = 1883;
-
-// CONFIG DEVICE
-String dId = "";
-String webhook_pass = "";
-String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
-const char *mqtt_host = "app.ivcariot.com";
-
-// FLAGS
-byte flag_led_status = 0;
-
-// CONSTANTS
+// PINS
 #define CONNECTIVITY_STATUS 2
 #define FLASH 26
 
-// Function Definitions TEMPLATE
+// CONFIG DEVICE
+String dId = "7777";
+String webhook_pass = "uwOvotZDpH";
+String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
+
+// MQTT
+int mqtt_port = 1883;
+const char *mqtt_host = "app.ivcariot.com";
+
+// FLAGS
+
+
+
+// GLOBALS
+String last_received_topic = "";
+String last_received_msg = "";
+long varsLastSend[20];
+long lastRequestCredentilasAttempt = 0;
+long lastWiFiConnectionAttempt = 0;
+long lastMqttReconnectAttempt = 0;
+long lastStats = 0;
+
+// Function Definitions (TEMPLATE)
 void clear();
 void checkWiFiConnection();
 bool getMqttCredentiales();
@@ -44,13 +55,13 @@ void saveParamCallback();
 String getParam(String name);
 void changeStatusLed();
 
-// Functiones Definitions APPLICATION
+// Functiones Definitions (APPLICATION)
 void processSensors();
 void processActuators();
 
-// Instances
-WiFiClient espClient;           // me sirve para usar la conexion wifi
-PubSubClient client(espClient); // se la paso a PubSubClient para que se conecte
+// INSTANCES
+WiFiClient espClient;           
+PubSubClient client(espClient);
 DynamicJsonDocument mqtt_data_doc(2048);
 DynamicJsonDocument presence(350);
 IoTicosSplitter splitter;
@@ -65,16 +76,16 @@ void setup()
 {
   Serial.begin(921600);
   clear();
-  Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
+  //Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
 
   pinMode(CONNECTIVITY_STATUS, OUTPUT);
   pinMode(FLASH, INPUT_PULLUP);
-  
+
   checkEnterAP();
-  
+
   setupMqttClient();
   setupWiFiManagerClient();
-  
+
   initialize();
 
   Serial.print(backgroundGreen + "\n\n LOOP RUNNING..." + fontReset);
@@ -82,62 +93,67 @@ void setup()
 
 void loop()
 {
-
   checkDeviceConnectivity();
-  
 }
 
+/* *************************************** */
+
 /* -------- APPLICATION FUNCTIONS -------- */
+
+/* *************************************** */
 
 void processSensors()
 {
   /*
-  *
-  * MANJEO DE LAS VARIABLES DE ENTRADA
-  *
-  * En esta funcion deberias leer los datos de los sensores. Es código que depende 
-  * de qué variables maneja tu dispositivo (temperatura, estado de luz, bomba, etc...)
-  * 
-  * Si la variable es analógica, la publicacion se hará automaticamente segun la frecuencia
-  * de envío que hallas configurado cuando crease la plantilla. Sólo tenes que encargarte de
-  * estar actualizando los valores que lees de los sensores y almacenarlos en:
-  * mqtt_data_doc["variables"][index]["last"]["value"]=dato_del_sensor.
-  * 
-  * Importante: debes asegurarte de que "index" sea la posicion en el array que ocupa el widget
-  * (de la plantilla asociada al dispositivo) en el cual querés ver los datos
-  * 
-  * Si la variable es digital y configuraste que el dispositivo la envía por cada cambio de estado,
-  * te tenés que encargar de detectar cuando la variable cambia de estado (ej. led on - led off) y
-  * hacer la publicacion MQTT
-  */
+   *
+   * MANJEO DE LAS VARIABLES DE ENTRADA
+   *
+   * En esta funcion deberias leer los datos de los sensores. Es código que depende
+   * de qué variables maneja tu dispositivo (temperatura, estado de luz, bomba, etc...)
+   *
+   * Si la variable es analógica, la publicacion se hará automaticamente segun la frecuencia
+   * de envío que hallas configurado cuando crease la plantilla. Sólo tenes que encargarte de
+   * estar actualizando los valores que lees de los sensores y almacenarlos en:
+   * mqtt_data_doc["variables"][index]["last"]["value"]=dato_del_sensor.
+   *
+   * Importante: debes asegurarte de que "index" sea la posicion en el array que ocupa el widget
+   * (de la plantilla asociada al dispositivo) en el cual querés ver los datos
+   *
+   * Si la variable es digital y configuraste que el dispositivo la envía por cada cambio de estado,
+   * te tenés que encargar de detectar cuando la variable cambia de estado (ej. led on - led off) y
+   * hacer la publicacion MQTT
+   */
 
+  
 }
 
 void processActuators()
 {
-  /* 
-  * MANJEO DE LAS VARIABLES DE SALIDA
-  *
-  * Esta funcion es llamada automaticamente cada vez que recibas un mensaje MQTT. El contenido de
-  * ese mensaje lo vas a encontrar en: mqtt_data_doc["variables"][index]["last"]["value"] y tenes 
-  * que ASEGURARTE de que "index" sea el indice que ocupa esa variable en el array
-  * de widgets de la plantlla asociada al dispositivo
-  * 
-  * Recordá que el conteido del mensaje lo configuraste a la hora de crear la plantilla, asique debe conincidir
-  * en tu código para saber QUÉ HACER CUANDO RECIBA TAL MENSAJE
-  */
-
+  /*
+   * MANJEO DE LAS VARIABLES DE SALIDA
+   *
+   * Esta funcion es llamada automaticamente cada vez que recibas un mensaje MQTT. El contenido de
+   * ese mensaje lo vas a encontrar en: mqtt_data_doc["variables"][index]["last"]["value"] y tenes
+   * que ASEGURARTE de que "index" sea el indice que ocupa esa variable en el array
+   * de widgets de la plantlla asociada al dispositivo
+   *
+   * Recordá que el conteido del mensaje lo configuraste a la hora de crear la plantilla, asique debe conincidir
+   * en tu código para saber QUÉ HACER CUANDO RECIBAS TAL MENSAJE
+   */
 }
 
+/* ************************************ */
 
 /* -------- TEMPLATE FUNCTIONS -------- */
+
+/* ************************************ */
 
 void setupMqttClient()
 {
 
-  /* 
-  * We configure parameters for the MQTT instance
-  */
+  /*
+   * We configure parameters for the MQTT instance
+   */
 
   client.setServer(mqtt_host, mqtt_port);
   client.setCallback(callback);
@@ -147,9 +163,9 @@ void setupMqttClient()
 void setupWiFiManagerClient()
 {
 
-  /* 
-  * We configure parameters for the WiFiManager instance 
-  */ 
+  /*
+   * We configure parameters for the WiFiManager instance
+   */
 
   wm.setDebugOutput(false);
   wm.setConnectTimeout(20);
@@ -186,24 +202,26 @@ void setupWiFiManagerClient()
   wm.setMenu(menu);
 }
 
-void initialize(){
+void initialize()
+{
 
-  /* 
-  * Aca hacemos el primer intento de conexion WIFI. Si hay credenciales guardadas,
-  * inicia la conexion con eso. Si no nunca se configuraron las credenciales entra
-  * en modo AP automaticamente. En ambos casos si la conexion falla, seguimos intentado
-  * (de forma no bloqueante) en el loop
-  */
+  /*
+   * Aca hacemos el primer intento de conexion WIFI. Si hay credenciales guardadas,
+   * inicia la conexion con eso. Si no nunca se configuraron las credenciales entra
+   * en modo AP automaticamente. En ambos casos si la conexion falla, seguimos intentado
+   * (de forma no bloqueante) en el loop
+   */
 
   bool wifiConnectionSuccess;
 
   /*
-  * Necesito este if/else unicamente para cambiar el comportamiento del
-  * LED. En un caso el LED indica que el ESP está en modo AP y en el otro caso
-  * que está intentando hacer la conexion WIFI con las ultimas credenciales guardadas
-  */
+   * Necesito este if/else unicamente para cambiar el comportamiento del
+   * LED. En un caso el LED indica que el ESP está en modo AP y en el otro caso
+   * que está intentando hacer la conexion WIFI con las ultimas credenciales guardadas
+   */
 
-  if (wm.getWiFiIsSaved()){
+  if (wm.getWiFiIsSaved())
+  {
 
     Serial.print(underlinePurple + "\n\nWiFi Connection in Progress..." + fontReset + Purple);
     // try to connect with the last SSID and PASSWORD saved
@@ -211,8 +229,9 @@ void initialize(){
     ticker.attach(0.7, changeStatusLed);
     wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
     ticker.detach();
-
-  }else {
+  }
+  else
+  {
 
     // SI no tengo credenciales guardadas WIFiManager entra en modo AP automaticamente
     Serial.print(underlinePurple + "\n\nNo Previous WIFI Credentials Saved" + Purple);
@@ -245,11 +264,11 @@ void initialize(){
 
 void changeStatusLed()
 {
-  /* 
-  * Esta funcion es llamda n veces cada "x" segundos por Ticker para hacer el parpadeo del led
-  * segun especifique en los parametros que recibe la libreria:
-  * ticker.attach(x, funcion_a_llamar);
-  * ticker.detach() -> deja de llamar a la funcion
+  /*
+   * Esta funcion es llamda n veces cada "x" segundos por Ticker para hacer el parpadeo del led
+   * segun especifique en los parametros que recibe la libreria:
+   * ticker.attach(x, funcion_a_llamar);
+   * ticker.detach() -> deja de llamar a la funcion
    */
   digitalWrite(CONNECTIVITY_STATUS, !digitalRead(CONNECTIVITY_STATUS));
 }
@@ -257,9 +276,9 @@ void changeStatusLed()
 String getParam(String name)
 {
   /*
-  * Funcion para obtener parametros personalizados de la web que sirve el 
-  * ESP cuando está en AP. Siempre se retornan como un Stirng 
-  */
+   * Funcion para obtener parametros personalizados de la web que sirve el
+   * ESP cuando está en AP. Siempre se retornan como un Stirng
+   */
 
   String value;
   if (wm.server->hasArg(name))
@@ -272,10 +291,10 @@ String getParam(String name)
 void saveParamCallback()
 {
   /*
-  * Callback triggerd whenever the user save the setup page. 
-  * Capture the data and save it in global
-  * variables to use later
-  */
+   * Callback triggerd whenever the user save the setup page.
+   * Capture the data and save it in global
+   * variables to use later
+   */
 
   dId = getParam("deviceid");
   webhook_pass = getParam("whpasswordid");
@@ -307,12 +326,12 @@ void checkEnterAP()
 
 void reportPresence()
 {
-  /* 
-  * Publico mensaje MQTT (retenido) avisando que el dispositivo se encuentra ONLINE.
-  * Esto se ejecuta cada vez que el dispoistivo se conecta al BROKER, ya sea la primera
-  * vez que se conecta o por cada reconexión (El el backend envio notificacion SOLO SI 
-  * EL DISPOSITIVO CAMBIÓ DE ONLINE A OFFLINE o viceversa)
-  */
+  /*
+   * Publico mensaje MQTT (retenido) avisando que el dispositivo se encuentra ONLINE.
+   * Esto se ejecuta cada vez que el dispoistivo se conecta al BROKER, ya sea la primera
+   * vez que se conecta o por cada reconexión (El el backend envio notificacion SOLO SI
+   * EL DISPOSITIVO CAMBIÓ DE ONLINE A OFFLINE o viceversa)
+   */
 
   String root_topic = mqtt_data_doc["topic"];
   String topic = root_topic + "dummy_var/status";
@@ -324,22 +343,19 @@ void reportPresence()
   Serial.print(boldGreen + "\n\n          ¡DEVICE ONLINE!" + fontReset);
 }
 
-String last_received_topic = "";
-String last_received_msg = "";
-
 void processIncomingMsg(String topic, String incoming)
 {
 
-  /* 
-  * Aca tengo que ver primero de qué variable me llegó el mensaje. Esto lo saco a partir
-  * del tópico que tiene la forma: userid/deviceid/variableid/actdata
-  * 
-  * Despues tengo que encontrar esa variable en el array de variables que maneja el
-  * dispoistivo e insertar en esa variable en la propiedad "last" el valor que me llego
-  * habiendolo parseado previamente. Tener en cuenta que la plataforma envia en formato JSON 
-  * algo como "{"value":"led_on"}"
-  *  
-  */
+  /*
+   * Aca tengo que ver primero de qué variable me llegó el mensaje. Esto lo saco a partir
+   * del tópico que tiene la forma: userid/deviceid/variableid/actdata
+   *
+   * Despues tengo que encontrar esa variable en el array de variables que maneja el
+   * dispoistivo e insertar en esa variable en la propiedad "last" el valor que me llego
+   * habiendolo parseado previamente. Tener en cuenta que la plataforma envia en formato JSON
+   * algo como "{"value":"led_on"}"
+   *
+   */
 
   String variable = splitter.split(topic, '/', 2);
 
@@ -369,38 +385,37 @@ void processIncomingMsg(String topic, String incoming)
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
-  /* 
-  * Con esta funcion callback le estoy diciendo que tiene que hacer la libreria MQTT cada vez que detecte
-  * que llego un mensaje. Entonces cuando llegue el mje Y SE EJECUTE LA INTRUCCION client.loop(), esta funcion
-  * es llamda automaticamente.
-  * 
-  * Los mensajes MQTT se transmiten como una sucesion de códigos ASCII, por eso lo que me pasa la 
-  * libreria es un array de bytes (pedazo de memoria) donde cada byte representa un codigo ASCII.
-  * Entonces voy armando el mensaje como tal concatenando cada uno de estos
-  */
+  /*
+   * Con esta funcion callback le estoy diciendo que tiene que hacer la libreria MQTT cada vez que detecte
+   * que llego un mensaje. Entonces cuando llegue el mje Y SE EJECUTE LA INTRUCCION client.loop(), esta funcion
+   * es llamda automaticamente.
+   *
+   * Los mensajes MQTT se transmiten como una sucesion de códigos ASCII, por eso lo que me pasa la
+   * libreria es un array de bytes (pedazo de memoria) donde cada byte representa un codigo ASCII.
+   * Entonces voy armando el mensaje como tal concatenando cada uno de estos
+   */
 
   String incoming = "";
 
   for (int i = 0; i < length; i++)
   {
     // cada payload[i] es un ASCII entonces lo parseo a tipo char
-    incoming += (char)payload[i]; 
+    incoming += (char)payload[i];
   }
 
   incoming.trim();
   processIncomingMsg(String(topic), incoming);
 }
 
-long varsLastSend[20];
 void sendToBroker()
 {
 
-  /* 
-  * Funcion que se ejecuta en el loop siempre y cuando este conectado al broker. Estoy chequeando
-  * permanentemente para las variables de entrada que se configuraron para enviar datos periodicamente, si
-  * se cumplió la frequencia de envío, y en ese caso publico.
-  * 
-  */
+  /*
+   * Funcion que se ejecuta en el loop siempre y cuando este conectado al broker. Estoy chequeando
+   * permanentemente para las variables de entrada que se configuraron para enviar datos periodicamente, si
+   * se cumplió la frequencia de envío, y en ese caso publico.
+   *
+   */
 
   long now = millis();
 
@@ -435,7 +450,6 @@ void sendToBroker()
   }
 }
 
-long lastRequestCredentilasAttempt = 0;
 bool reconnect()
 {
 
@@ -479,22 +493,22 @@ bool reconnect()
   return false;
 }
 
-void checkDeviceConnectivity(){
+void checkDeviceConnectivity()
+{
   checkWiFiConnection();
   checkMqttConnection();
 }
 
-long lastWiFiConnectionAttempt = 0;
 void checkWiFiConnection()
 {
 
-  /* 
+  /*
 
-  * Chequeamos permanentemente la conectividad WiFi del dispositivo. Si no estoy conectado a WiFi 
+  * Chequeamos permanentemente la conectividad WiFi del dispositivo. Si no estoy conectado a WiFi
   * inicio un intento de conexion con las ultimas credenciales almacenadas, pregunto por el estado a los 30 seg.
-  * Si sigo desconectado hago otro intento, y así sucesivamente. 
+  * Si sigo desconectado hago otro intento, y así sucesivamente.
   * ******Entre un intento y otro el loop sigue ejecutando******
-  * 
+  *
   */
 
   if (WiFi.status() != WL_CONNECTED)
@@ -517,16 +531,15 @@ void checkWiFiConnection()
   }
 }
 
-long lastMqttReconnectAttempt = 0;
 void checkMqttConnection()
 {
-  /* 
-  *
-  * Sólo si estoy conectado a WiFi, chequeo la conexion MQTT con el broker. Si no estoy conectado, hago la
-  * peticion HTTP para obtener credenciales al backend. Si la obtuve, intento la conexion MQTT. Estas ultimas 
-  * dos acciones son bloqueantes (detienen el loop).  
-  * 
-  */
+  /*
+   *
+   * Sólo si estoy conectado a WiFi, chequeo la conexion MQTT con el broker. Si no estoy conectado, hago la
+   * peticion HTTP para obtener credenciales al backend. Si la obtuve, intento la conexion MQTT. Estas ultimas
+   * dos acciones son bloqueantes (detienen el loop).
+   *
+   */
 
   if (!client.connected() && WiFi.status() == WL_CONNECTED)
   {
@@ -547,11 +560,11 @@ void checkMqttConnection()
   {
 
     /*
-    * Cando me llega un mje MQTT, éste va al BUFFER de la ESP. Esta línea lo que hace es decirle a la 
-    * librería MQTT que vaya al buffer y vea se hay mensajes pendientes de ser procesados, en ese caso
-    * se ejecuta la funcion callback y es ahi cuando el mensaje ya está disponible en mi programa. 
-    * De lo contrario, pueden llegar mensajes pero nunca me voy a enterar si no llamo a client.loop()
-    */
+     * Cando me llega un mje MQTT, éste va al BUFFER de la ESP. Esta línea lo que hace es decirle a la
+     * librería MQTT que vaya al buffer y vea se hay mensajes pendientes de ser procesados, en ese caso
+     * se ejecuta la funcion callback y es ahi cuando el mensaje ya está disponible en mi programa.
+     * De lo contrario, pueden llegar mensajes pero nunca me voy a enterar si no llamo a client.loop()
+     */
 
     client.loop();
     processSensors();
@@ -560,17 +573,18 @@ void checkMqttConnection()
   }
 }
 
-bool getMqttCredentiales(){
-  
+bool getMqttCredentiales()
+{
+
   /*
-  * Hacemos una peticion HTTP POST hacia nuestro backend y de forma BLOQUEANTE  (se frena el loop)
-  * esperamos la respuesta para obtener toda la inforamcion que necesita el dispositivo como: 
-  * credenciales MQTT, topico raíz al cual subscribirse (userId/dId) y todas las variables 
-  * con su configuracion que se crearon el la APP WEB.
-  * 
-  * Si la respuesta es 200 (OK) guardamos la respuesta que viene en formato JSON a el documento
-  * para que luego pueda ser usado como variables de C++ (es un parseo) 
-  */
+   * Hacemos una peticion HTTP POST hacia nuestro backend y de forma BLOQUEANTE  (se frena el loop)
+   * esperamos la respuesta para obtener toda la inforamcion que necesita el dispositivo como:
+   * credenciales MQTT, topico raíz al cual subscribirse (userId/dId) y todas las variables
+   * con su configuracion que se crearon el la APP WEB.
+   *
+   * Si la respuesta es 200 (OK) guardamos la respuesta que viene en formato JSON a el documento
+   * para que luego pueda ser usado como variables de C++ (es un parseo)
+   */
 
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
   delay(1000);
@@ -611,7 +625,6 @@ bool getMqttCredentiales(){
   return false;
 }
 
-long lastStats = 0;
 void print_stats()
 {
   long now = millis();
