@@ -14,8 +14,8 @@
 #define FLASH 26
 
 // CONFIG DEVICE
-String dId = "7777";
-String webhook_pass = "uwOvotZDpH";
+String dId = "";
+String webhook_pass = "";
 String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
 
 // MQTT
