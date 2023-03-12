@@ -99,7 +99,12 @@ void processSensors()
   * de qué variables maneja tu dispositivo (temperatura, estado de luz, bomba, etc...)
   * 
   * Si la variable es analógica, la publicacion se hará automaticamente segun la frecuencia
-  * de envío que hallas configurado cuando crease la plantilla.
+  * de envío que hallas configurado cuando crease la plantilla. Sólo tenes que encargarte de
+  * estar actualizando los valores que lees de los sensores y almacenarlos en:
+  * mqtt_data_doc["variables"][index]["last"]["value"]=dato_del_sensor.
+  * 
+  * Importante: debes asegurarte de que "index" sea la posicion en el array que ocupa el widget
+  * (de la plantilla asociada al dispositivo) en el cual querés ver los datos
   * 
   * Si la variable es digital y configuraste que el dispositivo la envía por cada cambio de estado,
   * te tenés que encargar de detectar cuando la variable cambia de estado (ej. led on - led off) y
@@ -115,8 +120,8 @@ void processActuators()
   *
   * Esta funcion es llamada automaticamente cada vez que recibas un mensaje MQTT. El contenido de
   * ese mensaje lo vas a encontrar en: mqtt_data_doc["variables"][index]["last"]["value"] y tenes 
-  * que asegurarte de que "index" sea el indice que ocupa esa variable (widget en la plantilla) en el array 
-  * de variables (o de widgets) de la plantilla asociada a este dispositivo
+  * que ASEGURARTE de que "index" sea el indice que ocupa esa variable en el array
+  * de widgets de la plantlla asociada al dispositivo
   * 
   * Recordá que el conteido del mensaje lo configuraste a la hora de crear la plantilla, asique debe conincidir
   * en tu código para saber QUÉ HACER CUANDO RECIBA TAL MENSAJE
@@ -389,6 +394,13 @@ void callback(char *topic, byte *payload, unsigned int length)
 long varsLastSend[20];
 void sendToBroker()
 {
+
+  /* 
+  * Funcion que se ejecuta en el loop siempre y cuando este conectado al broker. Estoy chequeando
+  * permanentemente para las variables de entrada que se configuraron para enviar datos periodicamente, si
+  * se cumplió la frequencia de envío, y en ese caso publico.
+  * 
+  */
 
   long now = millis();
 
