@@ -6,6 +6,14 @@
 #include <Colors.h>
 #include <IoTicosSplitter.h>
 #include <ArduinoJson.h>
+#include <Ticker.h>
+
+// include MDNS
+#ifdef ESP8266
+#include <ESP8266mDNS.h>
+#elif defined(ESP32)
+#include <ESPmDNS.h>
+#endif
 
 int mqtt_port = 1883;
 /* String dId = "5555";
@@ -23,10 +31,9 @@ int flag_led_status = 0;
 
 // PINS
 #define led 2
+#define TRIGGER_PIN 4
 
 // WIFI
-const char *wifi_ssid;
-const char *wifi_password;
 
 // Function Definitions TEMPLATE
 void clear();
@@ -39,11 +46,14 @@ void callback(char *topic, byte *payload, unsigned int length);
 void processIncomingMsg(String topic, String incoming);
 void print_stats();
 void reportPresence();
+void doWiFiManager();
+void changeStatusLed();
 
 // Functiones Definitions APPLICATION
 void processSensors();
 void processActuators();
 void publicData(boolean value);
+
 
 // Instances
 WiFiClient espClient;           // me sirve para usar la conexion wifi
@@ -52,17 +62,21 @@ DynamicJsonDocument mqtt_data_doc(2048);
 DynamicJsonDocument presence(350);
 IoTicosSplitter splitter;
 WiFiManager wm;
+Ticker ticker;
+
 
 void setup()
 {
   clear();
   Serial.begin(921600);
   pinMode(led, OUTPUT);
+  pinMode(ESTADO_ALARMA, OUTPUT);
 
   bool wifiConnectionSuccess;
   wm.setConnectTimeout(20);
   wm.setConfigPortalTimeout(120); // duracion del AP
-
+  wm.setBreakAfterConfig(true); // always exit configportal even if wifi save fails
+  wm.setEnableConfigPortal(false); // if true (default) then start the config portal from autoConnect if connection failed
   // Web Styles
   wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
   wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
@@ -76,20 +90,28 @@ void setup()
   if this is unsuccessful (or no previous network saved) it moves the ESP into Access Point mode
    and spins up a DNS and WebServer (default ip 192.168.4.1)
  */  
-  
-  wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking 
+
+  if(wm.getWiFiIsSaved()){
+    // SI tengo credenciales guardadas, WIFiManager intenta conectarse durante 20 segundos
+    ticker.attach(0.7,changeStatusLed);
+    wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
+    ticker.detach(); 
+  }else{
+    // SI no tengo credenciales guardadas WIFiManager entra en modo AP automaticamente
+    ticker.attach(0.2,changeStatusLed);
+    wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
+    ticker.detach();
+  }
 
   // saved wifi - quit webportal - timeout expired
 
   if (wifiConnectionSuccess){
     Serial.println(Green + "WIFI SUCCESS" + fontReset);
-    wifi_ssid=wm.getWiFiSSID().c_str();
-    wifi_password=wm.getWiFiPass().c_str();
+    digitalWrite(led,HIGH);
   }
   else{
     Serial.println(Red + "WIFI FAIL" + fontReset);
-    wifi_ssid=wm.getWiFiSSID().c_str();
-    wifi_password=wm.getWiFiPass().c_str();
+    digitalWrite(led,LOW);
   }
 
   client.setServer(mqtt_server, mqtt_port);
@@ -99,6 +121,7 @@ void setup()
 
 void loop()
 {
+  doWiFiManager();
   checkWiFiConnection();
   checkMqttConnection();
 
@@ -169,6 +192,22 @@ void publicData(boolean value)
 }
 
 /* -------- TEMPLATE TASKS -------- */
+void changeStatusLed(){
+  digitalWrite(led,!digitalRead(led));
+}
+
+void doWiFiManager(){ 
+
+  // is configuration portal requested?
+  if(digitalRead(TRIGGER_PIN) == LOW) {
+    ticker.attach(0.1, changeStatusLed);
+    Serial.println("Button Pressed (loop blocked), Starting AP");
+    wm.startConfigPortal("IvcarIoT"); // blocking 
+    // save - exit - timeout 
+    ticker.detach();
+  }
+
+}
 
 void reportPresence()
 {
@@ -311,6 +350,7 @@ void checkWiFiConnection()
 {
   if (WiFi.status() != WL_CONNECTED)
   {
+    digitalWrite(led,LOW);
 
     long now = millis();
     if (now - lastWiFiConnectionAttempt > 30000)
@@ -321,6 +361,8 @@ void checkWiFiConnection()
       Serial.print(wm.getWiFiSSID());
       WiFi.begin(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str()); 
     }
+  }else{
+    digitalWrite(led,HIGH);
   }
 }
 
@@ -348,7 +390,7 @@ void checkMqttConnection()
   else
   {
     client.loop();
-    processSensors();
+    //processSensors();
     sendToBroker();
     // print_stats();
   }
