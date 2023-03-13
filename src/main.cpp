@@ -10,7 +10,7 @@
 #include <Ticker.h>
 
 // PINS
-#define CONNECTIVITY_STATUS 2
+#define CONNECTIVITY_STATUS 15
 #define FLASH 16
 
 
@@ -78,7 +78,7 @@ Ticker ticker;
 
 void setup()
 {
-  Serial.begin(115200921600);
+  Serial.begin(115200);
   EEPROM.begin(512);
 
   clear();
