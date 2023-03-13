@@ -34,6 +34,8 @@ byte flag_aberturas = 0;
 byte flag_interior = 0;
 
 // GLOBALS
+long ultimaLecturaSirena = 0;
+long ultimaLecturaCentral = 0;
 String last_received_topic = "";
 String last_received_msg = "";
 long varsLastSend[20];
@@ -143,8 +145,20 @@ void processSensors()
    * hacer la publicacion MQTT
    */
 
-  detectarCambioCentral();
-  detectarCambioSirena();
+  long now = millis();
+
+  if (now - ultimaLecturaCentral > 5000)
+  {
+    ultimaLecturaCentral=millis();
+    detectarCambioCentral();
+  }
+
+  if (now - ultimaLecturaSirena > 5000)
+  {
+    ultimaLecturaSirena = millis();
+    detectarCambioSirena();
+  }
+
   detectarCambioInterior();
   detectarCambioAberturas();
 }
@@ -166,22 +180,16 @@ void detectarCambioCentral()
 
   if (central == 1 && flag_central == 0)
   {
-    delay(200);
-    if (central == 1 && flag_central == 0)
-    {
-      publicarCambio(central, 0);
-      flag_central = 1;
-    }
+
+    publicarCambio(central, 0);
+    flag_central = 1;
   }
 
   else if (central == 0 && flag_central == 1)
   {
-    delay(200);
-    if ((central == 0 && flag_central == 1))
-    {
-      publicarCambio(central, 0);
-      flag_central = 0;
-    }
+
+    publicarCambio(central, 0);
+    flag_central = 0;
   }
 }
 
@@ -411,7 +419,7 @@ void setupWiFiManagerClient()
   wm.setConfigPortalTimeout(120);  // duracion del AP
   wm.setBreakAfterConfig(true);    // always exit configportal even if wifi save fails
   wm.setEnableConfigPortal(false); // if true (default) then start the config portal from autoConnect if connection failed
-  
+
   // Web Styles
   wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
   wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
@@ -508,7 +516,6 @@ void saveParamCallback()
   webhook_pass = getParam("whpasswordid");
   writeFlash(0, dId);
   writeFlash(15, webhook_pass);
-
 }
 
 void checkEnterAP()
