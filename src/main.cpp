@@ -460,16 +460,17 @@ void initialize()
   bool wifiConnectionSuccess;
 
   Serial.print(underlinePurple + "\n\nWiFi Connection in Progress..." + fontReset + Purple);
-  ticker.attach(0.7, changeStatusLed);
+  ticker.attach(0.5, changeStatusLed);
   wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
   ticker.detach();
+  
 
   if (wifiConnectionSuccess)
   {
     Serial.print("  ⤵" + fontReset);
     Serial.print(boldGreen + "\n\n         WiFi Connection SUCCESS :)" + fontReset);
     digitalWrite(CONNECTIVITY_STATUS, HIGH);
-    delay(3000);
+    delay(5000);
   }
   else
   {
@@ -532,7 +533,7 @@ void checkEnterAP()
     Serial.print("  ⤵" + fontReset);
     Serial.print(boldWhite + "\nSSID:" + fontReset + "IvcarIoT");
     Serial.print(boldWhite + "\nPASS:" + fontReset + "12345678");
-    ticker.attach(0.1, changeStatusLed);
+    ticker.attach(0.05, changeStatusLed);
 
     wm.startConfigPortal("IvcarIoT"); // loop is blocked
 
@@ -681,7 +682,7 @@ bool reconnect()
       return false;
     }
   }
-  ticker.attach(0.7,changeStatusLed);
+
   setupMqttClient();
   Serial.print(underlinePurple + "\n\n\nTrying MQTT Connection" + fontReset + Purple + "  ⤵");
   String str_clientId = "device_" + dId;
@@ -695,7 +696,7 @@ bool reconnect()
   serializeJson(presence["offline"], will_message);
 
   bool mqttConnectionSuccess = client.connect(str_clientId.c_str(), username, password, will_topic.c_str(), 1, true, will_message.c_str(), false);
-  ticker.detach();
+
 
   if (mqttConnectionSuccess)
   { 
@@ -705,6 +706,7 @@ bool reconnect()
     reportPresence();
     delay(2000);
     client.subscribe((str_topic + "+/actdata").c_str());
+    ticker.detach();
     digitalWrite(CONNECTIVITY_STATUS, HIGH);
     return true;
 
@@ -760,7 +762,6 @@ void checkMqttConnection()
 
   if (!client.connected() && WiFi.status() == WL_CONNECTED)
   {
-    digitalWrite(CONNECTIVITY_STATUS, LOW);
     long now = millis();
 
     if (now - lastMqttReconnectAttempt > 5000)
@@ -804,7 +805,7 @@ bool getMqttCredentiales()
    * Si la respuesta es 200 (OK) guardamos la respuesta que viene en formato JSON a el documento
    * para que luego pueda ser usado como variables de C++ (es un parseo)
    */
-  ticker.attach(0.7, changeStatusLed);
+  ticker.attach(0.5, changeStatusLed);
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
   delay(1000);
 
@@ -823,7 +824,6 @@ bool getMqttCredentiales()
   {
     Serial.print(boldRed + "\n\n         Error Sending Post Request :( " + fontReset);
     http.end();
-    digitalWrite(CONNECTIVITY_STATUS,LOW);
     return false;
   }
 
@@ -831,7 +831,6 @@ bool getMqttCredentiales()
   {
     Serial.print(boldRed + "\n\n         Error in response :(   e-> " + fontReset + " " + response_code);
     http.end();
-    digitalWrite(CONNECTIVITY_STATUS,LOW);
     return false;
 
   }
@@ -842,14 +841,9 @@ bool getMqttCredentiales()
     Serial.print(boldGreen + "\n\n         Mqtt Credentials Obtained Successfully :) " + fontReset);
     http.end();
     deserializeJson(mqtt_data_doc, response_body);
-    mqtt_data_doc["obtained"] = "yes";
-    delay(2000);
-    digitalWrite(CONNECTIVITY_STATUS,HIGH);
-    delay(3000);
     return true;
   }
 
-  digitalWrite(CONNECTIVITY_STATUS,LOW);
   return false;
 }
 
