@@ -13,17 +13,17 @@
 #define CONNECTIVITY_STATUS 2
 #define FLASH 26
 
+
 // CONFIG DEVICE
-String dId = "";
+String dId = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = "";
-String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
+String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials";
 
 // MQTT
 int mqtt_port = 1883;
-const char *mqtt_host = "app.ivcariot.com";
+const char *mqtt_host = "192.168.1.108";
 
 // FLAGS
-
 
 
 // GLOBALS
@@ -54,20 +54,24 @@ void checkEnterAP();
 void saveParamCallback();
 String getParam(String name);
 void changeStatusLed();
+void writeFlash(int addr, String valor);
+String readFlash(int addr);
+String getTopicToPublish(byte index);
+String serializeMesageToSend(byte index, boolean lectura, boolean save);
+void publicarCambio(byte lectura, byte index);
+void incrementCounter(byte index);
 
 // Functiones Definitions (APPLICATION)
 void processSensors();
 void processActuators();
 
 // INSTANCES
-WiFiClient espClient;           
+WiFiClient espClient;
 PubSubClient client(espClient);
 DynamicJsonDocument mqtt_data_doc(2048);
 DynamicJsonDocument presence(350);
 IoTicosSplitter splitter;
 WiFiManager wm;
-WiFiManagerParameter custom_param_mqtt_port;
-WiFiManagerParameter custom_param_mqtt_host;
 WiFiManagerParameter custom_param_whpassword;
 WiFiManagerParameter custom_param_dId;
 Ticker ticker;
@@ -75,17 +79,14 @@ Ticker ticker;
 void setup()
 {
   Serial.begin(921600);
-  clear();
-  //Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
+  EEPROM.begin(512);
 
+  clear();
   pinMode(CONNECTIVITY_STATUS, OUTPUT);
   pinMode(FLASH, INPUT_PULLUP);
 
-  checkEnterAP();
-
-  setupMqttClient();
   setupWiFiManagerClient();
-
+  checkEnterAP();
   initialize();
 
   Serial.print(backgroundGreen + "\n\n LOOP RUNNING..." + fontReset);
@@ -124,7 +125,6 @@ void processSensors()
    * hacer la publicacion MQTT
    */
 
-  
 }
 
 void processActuators()
@@ -140,7 +140,9 @@ void processActuators()
    * Recordá que el conteido del mensaje lo configuraste a la hora de crear la plantilla, asique debe conincidir
    * en tu código para saber QUÉ HACER CUANDO RECIBAS TAL MENSAJE
    */
+
 }
+
 
 /* ************************************ */
 
@@ -173,29 +175,25 @@ void setupWiFiManagerClient()
   wm.setConfigPortalTimeout(120);  // duracion del AP
   wm.setBreakAfterConfig(true);    // always exit configportal even if wifi save fails
   wm.setEnableConfigPortal(false); // if true (default) then start the config portal from autoConnect if connection failed
+  
   // Web Styles
   wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
   wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
-  wm.setShowInfoErase(false);      // do not show erase button on info page
+  wm.setShowInfoErase(true);       // show erase (borrar) button on info page
   wm.setScanDispPerc(true);        // show RSSI as percentage not graph icons
 
   wm.setTitle("IVCAR IoT");
   wm.setCustomHeadElement("Device Managment - IvcarIoT");
 
-  // test custom html(radio)
-  const char *mqtt_port_input_str = "<br/><label for='mqttportid'>MQTT PORT</label><input type='text' name='mqttportid' value='1883'>";
-  const char *mqtt_host_input_str = "<br/><label for='mqtthostid'>MQTT HOST</label><input type='text' name='mqtthostid' value='192.168.0.8'>";
   const char *mqtt_did_input_str = "<br/><label for='deviceid'>DEVICE ID</label><input type='text' name='deviceid' placeholder='Enter your own dId'>";
   const char *mqtt_whpassword_input_str = "<br/><label for='whpasswordid'>DEVICE PASSWORD</label><input type='text' name='whpasswordid' placeholder='Enter the password'>";
-  new (&custom_param_mqtt_port) WiFiManagerParameter(mqtt_port_input_str); // custom HTML input
-  new (&custom_param_mqtt_host) WiFiManagerParameter(mqtt_host_input_str);
+
   new (&custom_param_dId) WiFiManagerParameter(mqtt_did_input_str);
   new (&custom_param_whpassword) WiFiManagerParameter(mqtt_whpassword_input_str);
 
-  wm.addParameter(&custom_param_mqtt_port);
-  wm.addParameter(&custom_param_mqtt_host);
   wm.addParameter(&custom_param_dId);
   wm.addParameter(&custom_param_whpassword);
+
   wm.setSaveParamsCallback(saveParamCallback);
 
   std::vector<const char *> menu = {"wifi", "info", "param", "sep", "restart", "exit"};
@@ -206,47 +204,21 @@ void initialize()
 {
 
   /*
-   * Aca hacemos el primer intento de conexion WIFI. Si hay credenciales guardadas,
-   * inicia la conexion con eso. Si no nunca se configuraron las credenciales entra
-   * en modo AP automaticamente. En ambos casos si la conexion falla, seguimos intentado
-   * (de forma no bloqueante) en el loop
+   * Aca hacemos el primer intento de conexion WIFI.
+   *
+   * Si hay credenciales guardadas, inicia la conexion con eso.
+   * Si la conexion falla, seguimos intentado (de forma no bloqueante) en el loop.
+   *
+   * Si no nunca se configuraron las credenciales, la conexion fallará y
+   * luego sigo con el loop.
    */
 
   bool wifiConnectionSuccess;
 
-  /*
-   * Necesito este if/else unicamente para cambiar el comportamiento del
-   * LED. En un caso el LED indica que el ESP está en modo AP y en el otro caso
-   * que está intentando hacer la conexion WIFI con las ultimas credenciales guardadas
-   */
-
-  if (wm.getWiFiIsSaved())
-  {
-
-    Serial.print(underlinePurple + "\n\nWiFi Connection in Progress..." + fontReset + Purple);
-    // try to connect with the last SSID and PASSWORD saved
-
-    ticker.attach(0.7, changeStatusLed);
-    wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
-    ticker.detach();
-  }
-  else
-  {
-
-    // SI no tengo credenciales guardadas WIFiManager entra en modo AP automaticamente
-    Serial.print(underlinePurple + "\n\nNo Previous WIFI Credentials Saved" + Purple);
-    Serial.print("  ⤵" + fontReset);
-    Serial.print(boldGreen + "\n\n         Access Point Started:" + fontReset);
-    Serial.print("\nSSID: IvcarIoT");
-    Serial.print("\nPASS: 12345678");
-    ticker.attach(0.2, changeStatusLed);
-    wifiConnectionSuccess = wm.autoConnect("IvcarIoT", "12345678"); // blocking
-    ticker.detach();
-  }
-
-  /* Para este punto, salió del modo AP bloqueante ya sea porque el usuario guardó credenciales,
-  salio del portal, o se cumplió el tiempo limite de estar en modo AP que son 120 seg (timeout).
-  La libreria me retoran un boolean diciendo si se pudo conectar o no.*/
+  Serial.print(underlinePurple + "\n\nWiFi Connection in Progress..." + fontReset + Purple);
+  ticker.attach(0.7, changeStatusLed);
+  wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
+  ticker.detach();
 
   if (wifiConnectionSuccess)
   {
@@ -260,6 +232,114 @@ void initialize()
     Serial.print(Red + "\n\n         Ups WiFi Connection Failed :( " + fontReset);
     digitalWrite(CONNECTIVITY_STATUS, LOW);
   }
+}
+
+void writeFlash(int addr, String valor)
+{
+  int size = valor.length();
+  char inchar[15];
+  valor.toCharArray(inchar, size + 1);
+  // grabo caracter por caracter en cada celda de la EEPROM
+  for (int i = 0; i < size; i++)
+  {
+    EEPROM.write(addr + i, inchar[i]);
+  }
+  // si el tamaño de "valor" es menor que el limite maximo limpio las demas posiciones
+  for (int i = size; i < 15; i++)
+  {
+    EEPROM.write(addr + i, 255);
+  }
+  EEPROM.commit();
+}
+
+String readFlash(int addr)
+{
+  byte lectura;
+  String str_lectura;
+  // leo 15 posiciones de memoria desde la posicion "addr"
+  for (int i = addr; i < addr + 15; i++)
+  {
+    lectura = EEPROM.read(i);
+    if (lectura != 255)
+    {
+      str_lectura += (char)lectura;
+    }
+  }
+  return str_lectura;
+}
+
+String getTopicToPublish(byte index)
+{
+  /*
+   * @index: posicion que ocupa en el array de widgets la variable que quiero enviar
+   *
+   * Armo el topico para publicar mensaje MQTT hacia la aplicacion WEB y lo retorno
+   *
+   */
+
+  String str_root_topic = mqtt_data_doc["topic"];
+  String variable = mqtt_data_doc["variables"][index]["variable"]; // obtengo el variableId
+  String str_topic = str_root_topic + variable + "/sdata";
+  return str_topic;
+}
+
+String serializeMesageToSend(byte index, boolean lectura, boolean save)
+{
+  /*
+   * @index: posicion que ocupa en el array de widgets la variable a la cual le voy a agregar
+   * la data que quiero enviar para luego hacer la serializacion (pasar a JSON)
+   *
+   * @lectura: es la data a enviar, el cambio de estado.
+   *
+   * @save: indica si esa data debe ser guardada en base de datos o no
+   *
+   * El objetivo de la funcion es tomar el valor de "lectura" y ponerselo en la variable
+   * que le corresponde para luego serializarlo con la libreria y retorno ese String
+   * que es lo que finalmente se publicará
+   *
+   */
+
+  String toSend = "";
+
+  // armo el objeto a enviar:
+  mqtt_data_doc["variables"][index]["last"]["value"] = lectura; // 0 / 1
+  mqtt_data_doc["variables"][index]["last"]["save"] = save;
+
+  // lo paso a JSON
+  serializeJson(mqtt_data_doc["variables"][index]["last"], toSend);
+  return toSend;
+}
+
+void publicarCambio(byte lectura, byte index)
+{
+  /*
+  * @lectura: es el ultimo valor leido que debe ser publicado (COMO RETENIDO PARA QUE NO SE PIERDA
+  SI EL CLIENTE WEB NO ESTA CONECTADO EN LA APLICACION EN ESE MOMENTO Y LO RECIBA AL CONECTARSE)
+  *
+  * En la funcion primero obtengo el topico a publicar. Como el mensaje lo tengo que mandar en fomrato
+  * JSON tengo que llamar a la libreria para hacer la serializaicon de lo que quiero enviar que tendrá
+  * la forma: "{"value":1, "save":1}" pero eso lo tengo que escribir en el documento mqtt_data_doc
+  * de la variable correspondiente a enviar y luego obtengo el resultado listo para enviar
+  *
+  */
+
+  String str_topic = getTopicToPublish(index);
+  String message_to_send = serializeMesageToSend(index, lectura, true);
+  client.publish(str_topic.c_str(), message_to_send.c_str(), true);
+  incrementCounter(index);
+}
+
+void incrementCounter(byte index)
+{
+
+  /*
+   * Cada vez que se envia un mensaje, a esa variable le incremento un contado.
+   * Es solo para verlo por la terminar si activo la funcion print_sats()
+   */
+
+  long counter = mqtt_data_doc["variables"][index]["counter"];
+  counter++;
+  mqtt_data_doc["variables"][index]["counter"] = counter;
 }
 
 void changeStatusLed()
@@ -298,8 +378,11 @@ void saveParamCallback()
 
   dId = getParam("deviceid");
   webhook_pass = getParam("whpasswordid");
-  mqtt_host = getParam("mqtthostid").c_str();
-  mqtt_port = getParam("mqttportid").toInt();
+  writeFlash(0, dId);
+  writeFlash(15, webhook_pass);
+
+  if (WiFi.status() == WL_CONNECTED)
+    wm.stopConfigPortal();
 }
 
 void checkEnterAP()
@@ -465,6 +548,7 @@ bool reconnect()
     }
   }
 
+  setupMqttClient();
   Serial.print(underlinePurple + "\n\n\nTrying MQTT Connection" + fontReset + Purple + "  ⤵");
   String str_clientId = "device_" + dId;
   const char *username = mqtt_data_doc["username"];
@@ -569,7 +653,7 @@ void checkMqttConnection()
     client.loop();
     processSensors();
     sendToBroker();
-    print_stats();
+    // print_stats();
   }
 }
 
@@ -589,6 +673,8 @@ bool getMqttCredentiales()
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
   delay(1000);
 
+  dId = readFlash(0);
+  webhook_pass = readFlash(15);
   String toSend = "dId=" + dId + "&whpassword=" + webhook_pass;
 
   HTTPClient http;
