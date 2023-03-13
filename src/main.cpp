@@ -11,7 +11,7 @@
 
 // PINS
 #define CONNECTIVITY_STATUS 2
-#define FLASH 26
+#define FLASH 16
 
 
 // CONFIG DEVICE
