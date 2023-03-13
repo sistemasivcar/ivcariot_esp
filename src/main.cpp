@@ -5,7 +5,6 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <EEPROM.h>
-#include <Preferences.h>
 #include <Colors.h>
 #include <IoTicosSplitter.h>
 #include <Ticker.h>
@@ -22,8 +21,6 @@
 // CONFIG DEVICE
 String dId = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = "";
-/* String dId = ""; // limitar hasta 15 caracteres (15 bytes)
-String webhook_pass = ""; // limitar hasta 15 caracteres (15 bytes) */
 String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials";
 
 // MQTT
@@ -292,7 +289,7 @@ void publicarCambio(byte lectura, byte index)
   */
 
   String str_topic = getTopicToPublish(index);
-  String message_to_send = serializeMesageToSend(0, lectura, true);
+  String message_to_send = serializeMesageToSend(index, lectura, true);
   client.publish(str_topic.c_str(), message_to_send.c_str(), true);
   incrementCounter(0);
 }
@@ -509,13 +506,9 @@ void saveParamCallback()
 
   dId = getParam("deviceid");
   webhook_pass = getParam("whpasswordid");
-  mqtt_host = getParam("mqtthostid").c_str();
-  mqtt_port = getParam("mqttportid").toInt();
   writeFlash(0, dId);
   writeFlash(15, webhook_pass);
 
-  if (WiFi.status() == WL_CONNECTED)
-    wm.stopConfigPortal();
 }
 
 void checkEnterAP()
