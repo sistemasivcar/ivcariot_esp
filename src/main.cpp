@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <WiFiManager.h>
-#include <WiFi.h>
-#include <HTTPClient.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <EEPROM.h>
@@ -78,7 +78,7 @@ Ticker ticker;
 
 void setup()
 {
-  Serial.begin(921600);
+  Serial.begin(115200921600);
   EEPROM.begin(512);
 
   clear();
@@ -678,7 +678,7 @@ bool getMqttCredentiales()
   String toSend = "dId=" + dId + "&whpassword=" + webhook_pass;
 
   HTTPClient http;
-  http.begin(webhook_url);
+  http.begin(espClient, webhook_url);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   // syncronous http request
   int response_code = http.POST(toSend);
