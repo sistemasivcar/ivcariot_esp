@@ -16,6 +16,8 @@
 #define SIRENAS 12 
 #define INTERIOR 04 
 #define ABERTURAS 13
+#define OUT 05
+#define TX 02
 
 // CONFIG DEVICE
 String dId = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
@@ -102,6 +104,8 @@ void setup()
   pinMode(SIRENAS, INPUT);
   pinMode(ABERTURAS, INPUT);
   pinMode(INTERIOR, INPUT);
+  pinMode(OUT,OUTPUT);
+  pinMode(TX,OUTPUT);
 
   setupWiFiManagerClient();
   checkEnterAP();
