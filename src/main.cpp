@@ -12,15 +12,15 @@
 // PINS
 #define CONNECTIVITY_STATUS 15
 #define FLASH 16
-#define CENTRAL 14 
-#define SIRENAS 12 
-#define INTERIOR 04 
+#define CENTRAL 14
+#define SIRENAS 12
+#define INTERIOR 04
 #define ABERTURAS 13
 #define OUT 05
 #define TX 02
 
 // CONFIG DEVICE
-String dId = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
+String dId = "";          // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials";
 
@@ -29,11 +29,10 @@ int mqtt_port = 1883;
 const char *mqtt_host = "192.168.1.108";
 
 // FLAGS
-byte flag_central=0;
-byte flag_sirena=0;
-byte flag_interior=0;
-byte flag_aberturas=0;
-
+byte flag_central = 0;
+byte flag_sirena = 0;
+byte flag_interior = 0;
+byte flag_aberturas = 0;
 
 // GLOBALS
 long ultimaLecturaCentral = 0;
@@ -80,6 +79,7 @@ void detectarCambioSirena();
 void detectarCambioAberturas();
 void detectarCambioInterior();
 void processActuators();
+void procesarComandosCentral();
 
 // INSTANCES
 WiFiClient espClient;
@@ -104,8 +104,8 @@ void setup()
   pinMode(SIRENAS, INPUT);
   pinMode(ABERTURAS, INPUT);
   pinMode(INTERIOR, INPUT);
-  pinMode(OUT,OUTPUT);
-  pinMode(TX,OUTPUT);
+  pinMode(OUT, OUTPUT);
+  pinMode(TX, OUTPUT);
 
   setupWiFiManagerClient();
   checkEnterAP();
@@ -148,12 +148,7 @@ void processSensors()
    */
 
   long now = millis();
-
-  if (now - ultimaLecturaCentral > 5000)
-  {
-    ultimaLecturaCentral=millis();
-    detectarCambioCentral();
-  }
+  detectarCambioCentral();
 
   if (now - ultimaLecturaSirena > 5000)
   {
@@ -177,21 +172,23 @@ void detectarCambioCentral()
    * SIRENA - INTERIOR - ABERTURAS)
    *
    */
-
+  long now = millis();
   byte central = digitalRead(CENTRAL);
 
   if (central == 1 && flag_central == 0)
   {
-
     publicarCambio(central, 0);
     flag_central = 1;
   }
 
   else if (central == 0 && flag_central == 1)
   {
-
-    publicarCambio(central, 0);
-    flag_central = 0;
+    if (now - ultimaLecturaCentral > 3000 && (central == 1 && flag_central == 0))
+    {
+      ultimaLecturaCentral = millis();
+      publicarCambio(central, 0);
+      flag_central = 0;
+    }
   }
 }
 
@@ -256,8 +253,30 @@ void processActuators()
    * en tu código para saber QUÉ HACER CUANDO RECIBAS TAL MENSAJE
    */
 
+  procesarComandosCentral();
 }
 
+void procesarComandosCentral()
+{
+  if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
+  {
+    // ACTIVAR ALARMA
+    digitalWrite(OUT, HIGH);
+    delay(1200);
+    digitalWrite(OUT, LOW);
+    mqtt_data_doc["variables"][1]["last"]["value"] = "";
+  }
+
+  else if (mqtt_data_doc["variables"][2]["last"]["value"] == "desactivar")
+  {
+    // DESACTIVAR ALARMA
+    digitalWrite(OUT, HIGH);
+    delay(1200);
+    digitalWrite(OUT, LOW);
+
+    mqtt_data_doc["variables"][2]["last"]["value"] = "";
+  }
+}
 
 /* ************************************ */
 
@@ -290,7 +309,7 @@ void setupWiFiManagerClient()
   wm.setConfigPortalTimeout(120);  // duracion del AP
   wm.setBreakAfterConfig(true);    // always exit configportal even if wifi save fails
   wm.setEnableConfigPortal(false); // if true (default) then start the config portal from autoConnect if connection failed
-  
+
   // Web Styles
   wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
   wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
@@ -661,10 +680,11 @@ bool reconnect()
       Serial.println(fontReset);
       return false;
     }
-  }else{
+  }
+  else
+  {
     return false;
   }
-
 
   setupMqttClient();
   Serial.print(underlinePurple + "\n\n\nTrying MQTT Connection" + fontReset + Purple + "  ⤵");
@@ -678,26 +698,25 @@ bool reconnect()
   presence["offline"]["name"] = mqtt_data_doc["device_name"];
   serializeJson(presence["offline"], will_message);
 
-  ticker.attach(0.7,changeStatusLed);
-  
-  bool mqttConnectionSuccess = client.connect
-  (str_clientId.c_str(), username, password, will_topic.c_str(), 1, true, will_message.c_str(), false);
-  
+  ticker.attach(0.7, changeStatusLed);
+
+  bool mqttConnectionSuccess = client.connect(str_clientId.c_str(), username, password, will_topic.c_str(), 1, true, will_message.c_str(), false);
+
   ticker.detach();
   if (mqttConnectionSuccess)
-  { 
+  {
 
     // WE ARE CONNECTED TO THE MQTT BROKER
     Serial.print(boldGreen + "\n\n         Mqtt Client Connected :) " + fontReset);
     delay(2000);
     reportPresence();
     client.subscribe((str_topic + "+/actdata").c_str());
-    digitalWrite(CONNECTIVITY_STATUS,HIGH);
+    digitalWrite(CONNECTIVITY_STATUS, HIGH);
     return true;
   }
 
   Serial.print(boldRed + "\n\n         Mqtt Client Connection Failed :( " + fontReset);
-  digitalWrite(CONNECTIVITY_STATUS,LOW);
+  digitalWrite(CONNECTIVITY_STATUS, LOW);
   return false;
 }
 
@@ -794,7 +813,7 @@ bool getMqttCredentiales()
    * para que luego pueda ser usado como variables de C++ (es un parseo)
    */
 
-  ticker.attach(0.7,changeStatusLed);
+  ticker.attach(0.7, changeStatusLed);
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
 
   dId = readFlash(0);
@@ -812,7 +831,7 @@ bool getMqttCredentiales()
   {
     Serial.print(boldRed + "\n\n         Error Sending Post Request :( " + fontReset);
     http.end();
-    digitalWrite(CONNECTIVITY_STATUS,LOW);
+    digitalWrite(CONNECTIVITY_STATUS, LOW);
     return false;
   }
 
@@ -820,7 +839,7 @@ bool getMqttCredentiales()
   {
     Serial.print(boldRed + "\n\n         Error in response :(   e-> " + fontReset + " " + response_code);
     http.end();
-    digitalWrite(CONNECTIVITY_STATUS,LOW);
+    digitalWrite(CONNECTIVITY_STATUS, LOW);
     return false;
   }
 
@@ -832,11 +851,11 @@ bool getMqttCredentiales()
     deserializeJson(mqtt_data_doc, response_body);
     mqtt_data_doc["obtained"] = "yes";
     delay(3000);
-    digitalWrite(CONNECTIVITY_STATUS,HIGH);
+    digitalWrite(CONNECTIVITY_STATUS, HIGH);
     return true;
   }
 
-  digitalWrite(CONNECTIVITY_STATUS,LOW);
+  digitalWrite(CONNECTIVITY_STATUS, LOW);
   return false;
 }
 
