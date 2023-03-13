@@ -320,8 +320,8 @@ void initialize()
    * Si hay credenciales guardadas, inicia la conexion con eso.
    * Si la conexion falla, seguimos intentado (de forma no bloqueante) en el loop.
    *
-   * Si no nunca se configuraron las credenciales, la conexion fallará y
-   * luego sigo con el loop.
+   * Si no nunca se configuraron las credenciales, ni siquiera intenta una conexion y
+   * entra directamente al else y luego se va al loop
    */
 
   bool wifiConnectionSuccess;
@@ -657,7 +657,10 @@ bool reconnect()
       Serial.println(fontReset);
       return false;
     }
+  }else{
+    return false;
   }
+
 
   setupMqttClient();
   Serial.print(underlinePurple + "\n\n\nTrying MQTT Connection" + fontReset + Purple + "  ⤵");
@@ -671,20 +674,26 @@ bool reconnect()
   presence["offline"]["name"] = mqtt_data_doc["device_name"];
   serializeJson(presence["offline"], will_message);
 
-  if (client.connect(str_clientId.c_str(), username, password, will_topic.c_str(), 1,
-                     true, will_message.c_str(), false))
-  { // will retain :true- clean session:false
+  ticker.attach(0.7,changeStatusLed);
+  
+  bool mqttConnectionSuccess = client.connect
+  (str_clientId.c_str(), username, password, will_topic.c_str(), 1, true, will_message.c_str(), false);
+  
+  ticker.detach();
+  if (mqttConnectionSuccess)
+  { 
 
     // WE ARE CONNECTED TO THE MQTT BROKER
     Serial.print(boldGreen + "\n\n         Mqtt Client Connected :) " + fontReset);
     delay(2000);
     reportPresence();
-    delay(2000);
     client.subscribe((str_topic + "+/actdata").c_str());
+    digitalWrite(CONNECTIVITY_STATUS,HIGH);
     return true;
   }
 
   Serial.print(boldRed + "\n\n         Mqtt Client Connection Failed :( " + fontReset);
+  digitalWrite(CONNECTIVITY_STATUS,LOW);
   return false;
 }
 
@@ -781,8 +790,8 @@ bool getMqttCredentiales()
    * para que luego pueda ser usado como variables de C++ (es un parseo)
    */
 
+  ticker.attach(0.7,changeStatusLed);
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
-  delay(1000);
 
   dId = readFlash(0);
   webhook_pass = readFlash(15);
@@ -794,10 +803,12 @@ bool getMqttCredentiales()
   // syncronous http request
   int response_code = http.POST(toSend);
 
+  ticker.detach();
   if (response_code < 0)
   {
     Serial.print(boldRed + "\n\n         Error Sending Post Request :( " + fontReset);
     http.end();
+    digitalWrite(CONNECTIVITY_STATUS,LOW);
     return false;
   }
 
@@ -805,6 +816,7 @@ bool getMqttCredentiales()
   {
     Serial.print(boldRed + "\n\n         Error in response :(   e-> " + fontReset + " " + response_code);
     http.end();
+    digitalWrite(CONNECTIVITY_STATUS,LOW);
     return false;
   }
 
@@ -815,10 +827,12 @@ bool getMqttCredentiales()
     http.end();
     deserializeJson(mqtt_data_doc, response_body);
     mqtt_data_doc["obtained"] = "yes";
-    delay(2000);
+    delay(3000);
+    digitalWrite(CONNECTIVITY_STATUS,HIGH);
     return true;
   }
 
+  digitalWrite(CONNECTIVITY_STATUS,LOW);
   return false;
 }
 
