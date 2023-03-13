@@ -5,6 +5,7 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <EEPROM.h>
+#include <Preferences.h>
 #include <Colors.h>
 #include <IoTicosSplitter.h>
 #include <Ticker.h>
@@ -19,8 +20,10 @@
 #define OUT 13
 
 // CONFIG DEVICE
-String dId = "84333";
-String webhook_pass = "oAvAsgj68W";
+String dId = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
+String webhook_pass = "";
+/* String dId = ""; // limitar hasta 15 caracteres (15 bytes)
+String webhook_pass = ""; // limitar hasta 15 caracteres (15 bytes) */
 String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials";
 
 // MQTT
@@ -62,6 +65,9 @@ void saveParamCallback();
 String getParam(String name);
 void changeStatusLed();
 
+void writeFlash(int addr, String valor);
+String readFlash(int addr);
+
 // Functiones Definitions (APPLICATION)
 void processSensors();
 void detectarCambioCentral();
@@ -81,8 +87,6 @@ DynamicJsonDocument mqtt_data_doc(2048);
 DynamicJsonDocument presence(350);
 IoTicosSplitter splitter;
 WiFiManager wm;
-WiFiManagerParameter custom_param_mqtt_port;
-WiFiManagerParameter custom_param_mqtt_host;
 WiFiManagerParameter custom_param_whpassword;
 WiFiManagerParameter custom_param_dId;
 Ticker ticker;
@@ -90,9 +94,10 @@ Ticker ticker;
 void setup()
 {
   Serial.begin(921600);
+  EEPROM.begin(512);
+
   clear();
   // Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
-
   pinMode(CONNECTIVITY_STATUS, OUTPUT);
   pinMode(FLASH, INPUT_PULLUP);
   pinMode(CENTRAL, INPUT);
@@ -100,11 +105,9 @@ void setup()
   pinMode(INTERIOR, INPUT_PULLUP);
   pinMode(ABERTURAS, INPUT_PULLUP);
   pinMode(OUT, OUTPUT);
-  checkEnterAP();
 
-  setupMqttClient();
   setupWiFiManagerClient();
-
+  checkEnterAP();
   initialize();
 
   Serial.print(backgroundGreen + "\n\n LOOP RUNNING..." + fontReset);
@@ -164,19 +167,20 @@ void detectarCambioCentral()
 
   byte central = digitalRead(CENTRAL);
 
-  if (central == 1 && flag_central == 0)  
+  if (central == 1 && flag_central == 0)
   {
     delay(200);
-    if (central == 1 && flag_central == 0){
-    publicarCambio(central, 0);
-    flag_central = 1;
+    if (central == 1 && flag_central == 0)
+    {
+      publicarCambio(central, 0);
+      flag_central = 1;
     }
   }
-  
+
   else if (central == 0 && flag_central == 1)
   {
     delay(200);
-    if((central == 0 && flag_central == 1))
+    if ((central == 0 && flag_central == 1))
     {
       publicarCambio(central, 0);
       flag_central = 0;
@@ -311,18 +315,18 @@ void procesarComandosCentral()
   if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
   {
     // ACTIVAR ALARMA
-    digitalWrite(OUT,HIGH);
+    digitalWrite(OUT, HIGH);
     delay(1200);
-    digitalWrite(OUT,LOW);
+    digitalWrite(OUT, LOW);
     mqtt_data_doc["variables"][1]["last"]["value"] = "";
   }
 
   else if (mqtt_data_doc["variables"][2]["last"]["value"] == "desactivar")
   {
     // DESACTIVAR ALARMA
-    digitalWrite(OUT,HIGH);
+    digitalWrite(OUT, HIGH);
     delay(1200);
-    digitalWrite(OUT,LOW);
+    digitalWrite(OUT, LOW);
 
     mqtt_data_doc["variables"][2]["last"]["value"] = "";
   }
@@ -343,6 +347,40 @@ void processActuators()
    */
 
   procesarComandosCentral();
+}
+
+void writeFlash(int addr, String valor)
+{
+  int size = valor.length();
+  char inchar[15];
+  valor.toCharArray(inchar, size + 1);
+  // grabo caracter por caracter en cada celda de la EEPROM
+  for (int i = 0; i < size; i++)
+  {
+    EEPROM.write(addr + i, inchar[i]);
+  }
+  // si el tamaño de "valor" es menor que el limite maximo limpio las demas posiciones
+  for (int i = size; i < 15; i++)
+  {
+    EEPROM.write(addr + i, 255);
+  }
+  EEPROM.commit();
+}
+
+String readFlash(int addr)
+{
+  byte lectura;
+  String str_lectura;
+  // leo 15 posiciones de memoria desde la posicion "addr"
+  for (int i = addr; i < addr + 15; i++)
+  {
+    lectura = EEPROM.read(i);
+    if (lectura != 255)
+    {
+      str_lectura += (char)lectura;
+    }
+  }
+  return str_lectura;
 }
 
 /* ************************************ */
@@ -376,29 +414,25 @@ void setupWiFiManagerClient()
   wm.setConfigPortalTimeout(120);  // duracion del AP
   wm.setBreakAfterConfig(true);    // always exit configportal even if wifi save fails
   wm.setEnableConfigPortal(false); // if true (default) then start the config portal from autoConnect if connection failed
+  
   // Web Styles
   wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
   wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
-  wm.setShowInfoErase(false);      // do not show erase button on info page
+  wm.setShowInfoErase(true);       // show erase (borrar) button on info page
   wm.setScanDispPerc(true);        // show RSSI as percentage not graph icons
 
   wm.setTitle("IVCAR IoT");
   wm.setCustomHeadElement("Device Managment - IvcarIoT");
 
-  // test custom html(radio)
-  const char *mqtt_port_input_str = "<br/><label for='mqttportid'>MQTT PORT</label><input type='text' name='mqttportid' value='1883'>";
-  const char *mqtt_host_input_str = "<br/><label for='mqtthostid'>MQTT HOST</label><input type='text' name='mqtthostid' value='192.168.0.8'>";
   const char *mqtt_did_input_str = "<br/><label for='deviceid'>DEVICE ID</label><input type='text' name='deviceid' placeholder='Enter your own dId'>";
   const char *mqtt_whpassword_input_str = "<br/><label for='whpasswordid'>DEVICE PASSWORD</label><input type='text' name='whpasswordid' placeholder='Enter the password'>";
-  new (&custom_param_mqtt_port) WiFiManagerParameter(mqtt_port_input_str); // custom HTML input
-  new (&custom_param_mqtt_host) WiFiManagerParameter(mqtt_host_input_str);
+
   new (&custom_param_dId) WiFiManagerParameter(mqtt_did_input_str);
   new (&custom_param_whpassword) WiFiManagerParameter(mqtt_whpassword_input_str);
 
-  wm.addParameter(&custom_param_mqtt_port);
-  wm.addParameter(&custom_param_mqtt_host);
   wm.addParameter(&custom_param_dId);
   wm.addParameter(&custom_param_whpassword);
+
   wm.setSaveParamsCallback(saveParamCallback);
 
   std::vector<const char *> menu = {"wifi", "info", "param", "sep", "restart", "exit"};
@@ -409,47 +443,21 @@ void initialize()
 {
 
   /*
-   * Aca hacemos el primer intento de conexion WIFI. Si hay credenciales guardadas,
-   * inicia la conexion con eso. Si no nunca se configuraron las credenciales entra
-   * en modo AP automaticamente. En ambos casos si la conexion falla, seguimos intentado
-   * (de forma no bloqueante) en el loop
+   * Aca hacemos el primer intento de conexion WIFI.
+   *
+   * Si hay credenciales guardadas, inicia la conexion con eso.
+   * Si la conexion falla, seguimos intentado (de forma no bloqueante) en el loop.
+   *
+   * Si no nunca se configuraron las credenciales, la conexion fallará y
+   * luego sigo con el loop.
    */
 
   bool wifiConnectionSuccess;
 
-  /*
-   * Necesito este if/else unicamente para cambiar el comportamiento del
-   * LED. En un caso el LED indica que el ESP está en modo AP y en el otro caso
-   * que está intentando hacer la conexion WIFI con las ultimas credenciales guardadas
-   */
-
-  if (wm.getWiFiIsSaved())
-  {
-
-    Serial.print(underlinePurple + "\n\nWiFi Connection in Progress..." + fontReset + Purple);
-    // try to connect with the last SSID and PASSWORD saved
-
-    ticker.attach(0.7, changeStatusLed);
-    wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
-    ticker.detach();
-  }
-  else
-  {
-
-    // SI no tengo credenciales guardadas WIFiManager entra en modo AP automaticamente
-    Serial.print(underlinePurple + "\n\nNo Previous WIFI Credentials Saved" + Purple);
-    Serial.print("  ⤵" + fontReset);
-    Serial.print(boldGreen + "\n\n         Access Point Started:" + fontReset);
-    Serial.print("\nSSID: IvcarIoT");
-    Serial.print("\nPASS: 12345678");
-    ticker.attach(0.2, changeStatusLed);
-    wifiConnectionSuccess = wm.autoConnect("IvcarIoT", "12345678"); // blocking
-    ticker.detach();
-  }
-
-  /* Para este punto, salió del modo AP bloqueante ya sea porque el usuario guardó credenciales,
-  salio del portal, o se cumplió el tiempo limite de estar en modo AP que son 120 seg (timeout).
-  La libreria me retoran un boolean diciendo si se pudo conectar o no.*/
+  Serial.print(underlinePurple + "\n\nWiFi Connection in Progress..." + fontReset + Purple);
+  ticker.attach(0.7, changeStatusLed);
+  wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
+  ticker.detach();
 
   if (wifiConnectionSuccess)
   {
@@ -503,6 +511,11 @@ void saveParamCallback()
   webhook_pass = getParam("whpasswordid");
   mqtt_host = getParam("mqtthostid").c_str();
   mqtt_port = getParam("mqttportid").toInt();
+  writeFlash(0, dId);
+  writeFlash(15, webhook_pass);
+
+  if (WiFi.status() == WL_CONNECTED)
+    wm.stopConfigPortal();
 }
 
 void checkEnterAP()
@@ -668,6 +681,7 @@ bool reconnect()
     }
   }
 
+  setupMqttClient();
   Serial.print(underlinePurple + "\n\n\nTrying MQTT Connection" + fontReset + Purple + "  ⤵");
   String str_clientId = "device_" + dId;
   const char *username = mqtt_data_doc["username"];
@@ -792,6 +806,8 @@ bool getMqttCredentiales()
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
   delay(1000);
 
+  dId = readFlash(0);
+  webhook_pass = readFlash(15);
   String toSend = "dId=" + dId + "&whpassword=" + webhook_pass;
 
   HTTPClient http;
