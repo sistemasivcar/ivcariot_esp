@@ -12,19 +12,26 @@
 // PINS
 #define CONNECTIVITY_STATUS 2
 #define FLASH 26
+#define CENTRAL 34
+#define SIRENA 35
+#define INTERIOR 32
+#define ABERTURAS 33
+#define OUT 13
 
 // CONFIG DEVICE
-String dId = "";
-String webhook_pass = "";
-String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
+String dId = "84333";
+String webhook_pass = "oAvAsgj68W";
+String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials";
 
 // MQTT
 int mqtt_port = 1883;
-const char *mqtt_host = "app.ivcariot.com";
+const char *mqtt_host = "192.168.1.108";
 
 // FLAGS
-
-
+byte flag_central = 0;
+byte flag_sirena = 0;
+byte flag_aberturas = 0;
+byte flag_interior = 0;
 
 // GLOBALS
 String last_received_topic = "";
@@ -57,10 +64,18 @@ void changeStatusLed();
 
 // Functiones Definitions (APPLICATION)
 void processSensors();
+void detectarCambioCentral();
+void detectarCambioSirena();
+void detectarCambioInterior();
+void detectarCambioAberturas();
+void publicarCambio(byte lectura, byte index);
+String serializeMesageToSend(byte index, boolean lectura, boolean save);
+void incrementCounter(byte index);
 void processActuators();
+void procesarComandosCentral();
 
 // INSTANCES
-WiFiClient espClient;           
+WiFiClient espClient;
 PubSubClient client(espClient);
 DynamicJsonDocument mqtt_data_doc(2048);
 DynamicJsonDocument presence(350);
@@ -76,11 +91,15 @@ void setup()
 {
   Serial.begin(921600);
   clear();
-  //Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
+  // Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
 
   pinMode(CONNECTIVITY_STATUS, OUTPUT);
   pinMode(FLASH, INPUT_PULLUP);
-
+  pinMode(CENTRAL, INPUT);
+  pinMode(SIRENA, INPUT);
+  pinMode(INTERIOR, INPUT_PULLUP);
+  pinMode(ABERTURAS, INPUT_PULLUP);
+  pinMode(OUT, OUTPUT);
   checkEnterAP();
 
   setupMqttClient();
@@ -124,7 +143,189 @@ void processSensors()
    * hacer la publicacion MQTT
    */
 
+  detectarCambioCentral();
+  detectarCambioSirena();
+  detectarCambioInterior();
+  detectarCambioAberturas();
+}
+
+void detectarCambioCentral()
+{
+
+  /*
+   * Detecto cambio de estado en el la entrada digital que me indica si
+   * la alarma está ACTIVADA o DESACTIVADA. Solo en los cambios de estado publico el
+   * mesaje como RETENIDO
+   *
+   * (LO MISMO HAGO PARA TODAS LAS DEMAS VARIABLES DIGITALES:
+   * SIRENA - INTERIOR - ABERTURAS)
+   *
+   */
+
+  byte central = digitalRead(CENTRAL);
+
+  if (central == 1 && flag_central == 0)  
+  {
+    delay(200);
+    if (central == 1 && flag_central == 0){
+    publicarCambio(central, 0);
+    flag_central = 1;
+    }
+  }
   
+  else if (central == 0 && flag_central == 1)
+  {
+    delay(200);
+    if((central == 0 && flag_central == 1))
+    {
+      publicarCambio(central, 0);
+      flag_central = 0;
+    }
+  }
+}
+
+void detectarCambioSirena()
+{
+
+  byte sirena = digitalRead(SIRENA);
+  if (sirena == 1 && flag_sirena == 0)
+  {
+    publicarCambio(sirena, 3);
+    flag_sirena = 1;
+  }
+  else if (sirena == 0 && flag_sirena == 1)
+  {
+    publicarCambio(sirena, 3);
+    flag_sirena = 0;
+  }
+}
+
+void detectarCambioAberturas()
+{
+
+  byte aberturas = digitalRead(ABERTURAS);
+  if (aberturas == 1 && flag_aberturas == 0)
+  {
+    publicarCambio(aberturas, 4);
+    flag_aberturas = 1;
+  }
+  else if (aberturas == 0 && flag_aberturas == 1)
+  {
+    publicarCambio(aberturas, 4);
+    flag_aberturas = 0;
+  }
+}
+
+void detectarCambioInterior()
+{
+
+  byte interior = digitalRead(INTERIOR);
+  if (interior == 1 && flag_interior == 0)
+  {
+    publicarCambio(interior, 5);
+    flag_interior = 1;
+  }
+  else if (interior == 0 && flag_interior == 1)
+  {
+    publicarCambio(interior, 5);
+    flag_interior = 0;
+  }
+}
+
+String getTopicToPublish(byte index)
+{
+  /*
+   * @index: posicion que ocupa en el array de widgets la variable que quiero enviar
+   *
+   * Armo el topico para publicar mensaje MQTT hacia la aplicacion WEB y lo retorno
+   *
+   */
+
+  String str_root_topic = mqtt_data_doc["topic"];
+  String variable = mqtt_data_doc["variables"][index]["variable"]; // obtengo el variableId
+  String str_topic = str_root_topic + variable + "/sdata";
+  return str_topic;
+}
+
+String serializeMesageToSend(byte index, boolean lectura, boolean save)
+{
+  /*
+   * @index: posicion que ocupa en el array de widgets la variable a la cual le voy a agregar
+   * la data que quiero enviar para luego hacer la serializacion (pasar a JSON)
+   *
+   * @lectura: es la data a enviar, el cambio de estado.
+   *
+   * @save: indica si esa data debe ser guardada en base de datos o no
+   *
+   * El objetivo de la funcion es tomar el valor de "lectura" y ponerselo en la variable
+   * que le corresponde para luego serializarlo con la libreria y retorno ese String
+   * que es lo que finalmente se publicará
+   *
+   */
+
+  String toSend = "";
+
+  // armo el objeto a enviar:
+  mqtt_data_doc["variables"][index]["last"]["value"] = lectura; // 0 / 1
+  mqtt_data_doc["variables"][index]["last"]["save"] = save;
+
+  // lo paso a JSON
+  serializeJson(mqtt_data_doc["variables"][index]["last"], toSend);
+  return toSend;
+}
+
+void publicarCambio(byte lectura, byte index)
+{
+  /*
+  * @lectura: es el ultimo valor leido que debe ser publicado (COMO RETENIDO PARA QUE NO SE PIERDA
+  SI EL CLIENTE WEB NO ESTA CONECTADO EN LA APLICACION EN ESE MOMENTO Y LO RECIBA AL CONECTARSE)
+  *
+  * En la funcion primero obtengo el topico a publicar. Como el mensaje lo tengo que mandar en fomrato
+  * JSON tengo que llamar a la libreria para hacer la serializaicon de lo que quiero enviar que tendrá
+  * la forma: "{"value":1, "save":1}" pero eso lo tengo que escribir en el documento mqtt_data_doc
+  * de la variable correspondiente a enviar y luego obtengo el resultado listo para enviar
+  *
+  */
+
+  String str_topic = getTopicToPublish(index);
+  String message_to_send = serializeMesageToSend(0, lectura, true);
+  client.publish(str_topic.c_str(), message_to_send.c_str(), true);
+  incrementCounter(0);
+}
+
+void incrementCounter(byte index)
+{
+
+  /*
+   * Cada vez que se envia un mensaje, a esa variable le incremento un contado.
+   * Es solo para verlo por la terminar si activo la funcion print_sats()
+   */
+
+  long counter = mqtt_data_doc["variables"][index]["counter"];
+  counter++;
+  mqtt_data_doc["variables"][index]["counter"] = counter;
+}
+
+void procesarComandosCentral()
+{
+  if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
+  {
+    // ACTIVAR ALARMA
+    digitalWrite(OUT,HIGH);
+    delay(1200);
+    digitalWrite(OUT,LOW);
+    mqtt_data_doc["variables"][1]["last"]["value"] = "";
+  }
+
+  else if (mqtt_data_doc["variables"][2]["last"]["value"] == "desactivar")
+  {
+    // DESACTIVAR ALARMA
+    digitalWrite(OUT,HIGH);
+    delay(1200);
+    digitalWrite(OUT,LOW);
+
+    mqtt_data_doc["variables"][2]["last"]["value"] = "";
+  }
 }
 
 void processActuators()
@@ -140,6 +341,8 @@ void processActuators()
    * Recordá que el conteido del mensaje lo configuraste a la hora de crear la plantilla, asique debe conincidir
    * en tu código para saber QUÉ HACER CUANDO RECIBAS TAL MENSAJE
    */
+
+  procesarComandosCentral();
 }
 
 /* ************************************ */
@@ -569,7 +772,7 @@ void checkMqttConnection()
     client.loop();
     processSensors();
     sendToBroker();
-    print_stats();
+    // print_stats();
   }
 }
 
