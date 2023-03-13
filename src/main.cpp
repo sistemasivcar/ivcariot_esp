@@ -12,11 +12,14 @@
 // PINS
 #define CONNECTIVITY_STATUS 15
 #define FLASH 16
-
+#define CENTRAL 14 
+#define SIRENAS 12 
+#define INTERIOR 04 
+#define ABERTURAS 13
 
 // CONFIG DEVICE
 String dId = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
-String webhook_pass = "";
+String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials";
 
 // MQTT
@@ -24,9 +27,16 @@ int mqtt_port = 1883;
 const char *mqtt_host = "192.168.1.108";
 
 // FLAGS
+byte flag_central=0;
+byte flag_sirena=0;
+byte flag_interior=0;
+byte flag_aberturas=0;
 
 
 // GLOBALS
+long ultimaLecturaCentral = 0;
+long ultimaLecturaSirena = 0;
+
 String last_received_topic = "";
 String last_received_msg = "";
 long varsLastSend[20];
@@ -63,6 +73,10 @@ void incrementCounter(byte index);
 
 // Functiones Definitions (APPLICATION)
 void processSensors();
+void detectarCambioCentral();
+void detectarCambioSirena();
+void detectarCambioAberturas();
+void detectarCambioInterior();
 void processActuators();
 
 // INSTANCES
@@ -84,6 +98,10 @@ void setup()
   clear();
   pinMode(CONNECTIVITY_STATUS, OUTPUT);
   pinMode(FLASH, INPUT_PULLUP);
+  pinMode(CENTRAL, INPUT);
+  pinMode(SIRENAS, INPUT);
+  pinMode(ABERTURAS, INPUT);
+  pinMode(INTERIOR, INPUT);
 
   setupWiFiManagerClient();
   checkEnterAP();
@@ -125,8 +143,101 @@ void processSensors()
    * hacer la publicacion MQTT
    */
 
+  long now = millis();
+
+  if (now - ultimaLecturaCentral > 5000)
+  {
+    ultimaLecturaCentral=millis();
+    detectarCambioCentral();
+  }
+
+  if (now - ultimaLecturaSirena > 5000)
+  {
+    ultimaLecturaSirena = millis();
+    detectarCambioSirena();
+  }
+
+  detectarCambioInterior();
+  detectarCambioAberturas();
 }
 
+void detectarCambioCentral()
+{
+
+  /*
+   * Detecto cambio de estado en el la entrada digital que me indica si
+   * la alarma está ACTIVADA o DESACTIVADA. Solo en los cambios de estado publico el
+   * mesaje como RETENIDO
+   *
+   * (LO MISMO HAGO PARA TODAS LAS DEMAS VARIABLES DIGITALES:
+   * SIRENA - INTERIOR - ABERTURAS)
+   *
+   */
+
+  byte central = digitalRead(CENTRAL);
+
+  if (central == 1 && flag_central == 0)
+  {
+
+    publicarCambio(central, 0);
+    flag_central = 1;
+  }
+
+  else if (central == 0 && flag_central == 1)
+  {
+
+    publicarCambio(central, 0);
+    flag_central = 0;
+  }
+}
+
+void detectarCambioSirena()
+{
+
+  byte sirena = digitalRead(SIRENAS);
+  if (sirena == 1 && flag_sirena == 0)
+  {
+    publicarCambio(sirena, 3);
+    flag_sirena = 1;
+  }
+  else if (sirena == 0 && flag_sirena == 1)
+  {
+    publicarCambio(sirena, 3);
+    flag_sirena = 0;
+  }
+}
+
+void detectarCambioAberturas()
+{
+
+  byte aberturas = digitalRead(ABERTURAS);
+  if (aberturas == 1 && flag_aberturas == 0)
+  {
+    publicarCambio(aberturas, 4);
+    flag_aberturas = 1;
+  }
+  else if (aberturas == 0 && flag_aberturas == 1)
+  {
+    publicarCambio(aberturas, 4);
+    flag_aberturas = 0;
+  }
+}
+
+void detectarCambioInterior()
+{
+
+  byte interior = digitalRead(INTERIOR);
+  if (interior == 1 && flag_interior == 0)
+  {
+    publicarCambio(interior, 5);
+    flag_interior = 1;
+  }
+  else if (interior == 0 && flag_interior == 1)
+  {
+    publicarCambio(interior, 5);
+    flag_interior = 0;
+  }
+}
 void processActuators()
 {
   /*
