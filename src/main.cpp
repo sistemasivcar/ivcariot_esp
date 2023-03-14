@@ -22,11 +22,11 @@
 // CONFIG DEVICE
 String dId = "";          // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
-String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials";
+String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
 
 // MQTT
 int mqtt_port = 1883;
-const char *mqtt_host = "192.168.1.108";
+const char *mqtt_host = "app.ivcariot.com";
 
 // LECTURA DE SENSORES
 byte central;
@@ -102,6 +102,7 @@ void setup()
 {
   Serial.begin(115200);
   EEPROM.begin(512);
+  Serial.println("url_webwook" + webhook_url);
 
   clear();
   pinMode(CONNECTIVITY_STATUS, OUTPUT);
