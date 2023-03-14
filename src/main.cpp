@@ -28,6 +28,12 @@ String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials
 int mqtt_port = 1883;
 const char *mqtt_host = "192.168.1.108";
 
+// LECTURA DE SENSORES
+byte central;
+byte sirena;
+byte abertura;
+byte interior;
+
 // FLAGS
 byte flag_central = 0;
 byte flag_sirena = 0;
@@ -172,8 +178,8 @@ void detectarCambioCentral()
    * SIRENA - INTERIOR - ABERTURAS)
    *
    */
-  long now = millis();
-  byte central = digitalRead(CENTRAL);
+
+  central = digitalRead(CENTRAL);
 
   if (central == 1 && flag_central == 0)
   {
@@ -183,43 +189,47 @@ void detectarCambioCentral()
 
   else if (central == 0 && flag_central == 1)
   {
-    if (now - ultimaLecturaCentral > 3000 && (central == 1 && flag_central == 0))
-    {
-      ultimaLecturaCentral = millis();
+
+    
       publicarCambio(central, 0);
       flag_central = 0;
-    }
+    
   }
 }
 
 void detectarCambioSirena()
 {
 
-  byte sirena = digitalRead(SIRENAS);
+
+  sirena = digitalRead(SIRENAS);
+
   if (sirena == 1 && flag_sirena == 0)
   {
-    publicarCambio(sirena, 3);
+    publicarCambio(!sirena, 3);
     flag_sirena = 1;
   }
   else if (sirena == 0 && flag_sirena == 1)
   {
-    publicarCambio(sirena, 3);
-    flag_sirena = 0;
+    delay(3000);
+    if(digitalRead(SIRENAS) == 0){
+      publicarCambio(!sirena, 3);
+    
+    }
   }
 }
 
 void detectarCambioAberturas()
 {
 
-  byte aberturas = digitalRead(ABERTURAS);
-  if (aberturas == 1 && flag_aberturas == 0)
+  abertura = digitalRead(ABERTURAS);
+  if (abertura == 1 && flag_aberturas == 0)
   {
-    publicarCambio(aberturas, 4);
+    publicarCambio(abertura, 4);
     flag_aberturas = 1;
   }
-  else if (aberturas == 0 && flag_aberturas == 1)
+  else if (abertura == 0 && flag_aberturas == 1)
   {
-    publicarCambio(aberturas, 4);
+    publicarCambio(abertura, 4);
     flag_aberturas = 0;
   }
 }
@@ -227,7 +237,7 @@ void detectarCambioAberturas()
 void detectarCambioInterior()
 {
 
-  byte interior = digitalRead(INTERIOR);
+  interior = digitalRead(INTERIOR);
   if (interior == 1 && flag_interior == 0)
   {
     publicarCambio(interior, 5);
