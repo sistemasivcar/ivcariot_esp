@@ -319,6 +319,16 @@ void incrementCounter(byte index)
 
 void procesarComandosCentral()
 {
+  /* 
+  * PROCESAMIENTO DE BOTONES: ACTIVAR - DESACTIVAR
+  *
+  * Aca estoy definiendo que hacer en caso de pulsar el boton de ACTIVAR en 
+  * la aplicacion, y lo mimsmo cuando se presiona DESACTIVAR
+  * 
+  * Cada uno manda un mensaje MQTT "activar" y "desactivar" que fueron configurados a la
+  * hora de crear el widget en la plantilla asociada al dispositivo
+  */
+
   if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
   {
     // ACTIVAR ALARMA
