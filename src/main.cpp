@@ -414,6 +414,7 @@ byte getFlag(int addr){
   }
   return 0;
 }
+
 /* ************************************ */
 
 /* -------- TEMPLATE FUNCTIONS -------- */
