@@ -35,10 +35,10 @@ byte abertura;
 byte interior;
 
 // FLAGS
-byte flag_central = 0;
-byte flag_sirena = 0;
-byte flag_interior = 0;
-byte flag_aberturas = 0;
+byte flag_central;
+byte flag_sirena;
+byte flag_interior;
+byte flag_aberturas;
 
 // GLOBALS
 
