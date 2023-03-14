@@ -27,6 +27,12 @@ String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials
 int mqtt_port = 1883;
 const char *mqtt_host = "192.168.1.108";
 
+// LECTURA DE SENSORES
+byte central;
+byte sirena;
+byte abertura;
+byte interior;
+
 // FLAGS
 byte flag_central = 0;
 byte flag_sirena = 0;
@@ -34,8 +40,9 @@ byte flag_aberturas = 0;
 byte flag_interior = 0;
 
 // GLOBALS
+long ultimoCambioSirenaDetectado;
 long ultimaLecturaSirena = 0;
-long ultimaLecturaCentral = 0;
+
 String last_received_topic = "";
 String last_received_msg = "";
 long varsLastSend[20];
@@ -145,20 +152,8 @@ void processSensors()
    * hacer la publicacion MQTT
    */
 
-  long now = millis();
-
-  if (now - ultimaLecturaCentral > 5000)
-  {
-    ultimaLecturaCentral=millis();
-    detectarCambioCentral();
-  }
-
-  if (now - ultimaLecturaSirena > 5000)
-  {
-    ultimaLecturaSirena = millis();
-    detectarCambioSirena();
-  }
-
+  detectarCambioCentral();
+  detectarCambioSirena();
   detectarCambioInterior();
   detectarCambioAberturas();
 }
@@ -180,14 +175,12 @@ void detectarCambioCentral()
 
   if (central == 1 && flag_central == 0)
   {
-
     publicarCambio(central, 0);
     flag_central = 1;
   }
 
   else if (central == 0 && flag_central == 1)
   {
-
     publicarCambio(central, 0);
     flag_central = 0;
   }
@@ -196,16 +189,23 @@ void detectarCambioCentral()
 void detectarCambioSirena()
 {
 
-  byte sirena = digitalRead(SIRENA);
+  long now = millis();
+
+  sirena = digitalRead(SIRENA);
+
   if (sirena == 1 && flag_sirena == 0)
   {
-    publicarCambio(sirena, 3);
+    publicarCambio(!sirena, 3);
     flag_sirena = 1;
   }
   else if (sirena == 0 && flag_sirena == 1)
   {
-    publicarCambio(sirena, 3);
-    flag_sirena = 0;
+    delay(3000);
+    if(digitalRead(SIRENA) == 0){
+      publicarCambio(!sirena, 3);
+      ultimoCambioSirenaDetectado=millis();
+    
+    }
   }
 }
 
@@ -463,7 +463,6 @@ void initialize()
   ticker.attach(0.5, changeStatusLed);
   wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
   ticker.detach();
-  
 
   if (wifiConnectionSuccess)
   {
@@ -697,19 +696,16 @@ bool reconnect()
 
   bool mqttConnectionSuccess = client.connect(str_clientId.c_str(), username, password, will_topic.c_str(), 1, true, will_message.c_str(), false);
 
-
   if (mqttConnectionSuccess)
-  { 
+  {
     // WE ARE CONNECTED TO THE MQTT BROKER
     Serial.print(boldGreen + "\n\n         Mqtt Client Connected :) " + fontReset);
-    delay(2000);
     reportPresence();
     delay(2000);
     client.subscribe((str_topic + "+/actdata").c_str());
     ticker.detach();
     digitalWrite(CONNECTIVITY_STATUS, HIGH);
     return true;
-
   }
   digitalWrite(CONNECTIVITY_STATUS, LOW);
   Serial.print(boldRed + "\n\n         Mqtt Client Connection Failed :( " + fontReset);
@@ -807,7 +803,6 @@ bool getMqttCredentiales()
    */
   ticker.attach(0.5, changeStatusLed);
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
-  delay(1000);
 
   dId = readFlash(0);
   webhook_pass = readFlash(15);
@@ -832,7 +827,6 @@ bool getMqttCredentiales()
     Serial.print(boldRed + "\n\n         Error in response :(   e-> " + fontReset + " " + response_code);
     http.end();
     return false;
-
   }
 
   else if (response_code == 200)
