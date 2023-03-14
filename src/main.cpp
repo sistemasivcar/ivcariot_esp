@@ -331,20 +331,25 @@ void procesarComandosCentral()
   if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
   {
     // ACTIVAR ALARMA
-    digitalWrite(OUT, HIGH);
-    delay(1200);
-    digitalWrite(OUT, LOW);
+    if(digitalRead(CENTRAL)==LOW){
+      digitalWrite(OUT, HIGH);
+      delay(1200);
+      digitalWrite(OUT, LOW);
+    }
+    
     mqtt_data_doc["variables"][1]["last"]["value"] = "";
   }
 
   else if (mqtt_data_doc["variables"][2]["last"]["value"] == "desactivar")
   {
     // DESACTIVAR ALARMA
-    digitalWrite(OUT, HIGH);
-    delay(1200);
-    digitalWrite(OUT, LOW);
-
-    mqtt_data_doc["variables"][2]["last"]["value"] = "";
+    if(digitalRead(CENTRAL)==HIGH){
+      digitalWrite(OUT, HIGH);
+      delay(1200);
+      digitalWrite(OUT, LOW);
+    }
+    
+    mqtt_data_doc["variables"][1]["last"]["value"] = "";
   }
 }
 
