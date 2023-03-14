@@ -190,16 +190,13 @@ void detectarCambioCentral()
   else if (central == 0 && flag_central == 1)
   {
 
-    
-      publicarCambio(central, 0);
-      flag_central = 0;
-    
+    publicarCambio(central, 0);
+    flag_central = 0;
   }
 }
 
 void detectarCambioSirena()
 {
-
 
   sirena = digitalRead(SIRENAS);
 
@@ -211,9 +208,9 @@ void detectarCambioSirena()
   else if (sirena == 0 && flag_sirena == 1)
   {
     delay(3000);
-    if(digitalRead(SIRENAS) == 0){
+    if (digitalRead(SIRENAS) == 0)
+    {
       publicarCambio(!sirena, 3);
-    
     }
   }
 }
