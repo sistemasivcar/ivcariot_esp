@@ -72,6 +72,8 @@ String getParam(String name);
 void changeStatusLed();
 void writeFlash(int addr, String valor);
 String readFlash(int addr);
+void setFlag(int addr, byte flag);
+byte getFlag(int addr);
 String getTopicToPublish(byte index);
 String serializeMesageToSend(byte index, boolean lectura, boolean save);
 void publicarCambio(byte lectura, byte index);
@@ -175,17 +177,16 @@ void detectarCambioCentral()
 
   central = digitalRead(CENTRAL);
 
-  if (central == 1 && flag_central == 0)
+  if (central == 1 && getFlag(30) == 0)
   {
     publicarCambio(central, 0);
-    flag_central = 1;
+    setFlag(30,central);
   }
 
-  else if (central == 0 && flag_central == 1)
+  else if (central == 0 && getFlag(30) == 1)
   {
-
     publicarCambio(central, 0);
-    flag_central = 0;
+    setFlag(30,central);
   }
 }
 
@@ -194,18 +195,18 @@ void detectarCambioSirena()
 
   sirena = digitalRead(SIRENAS);
 
-  if (sirena == 1 && flag_sirena == 0)
+  if (sirena == 1 && getFlag(31) == 0)
   {
     publicarCambio(!sirena, 3);
-    flag_sirena = 1;
+    setFlag(31,sirena);
   }
-  else if (sirena == 0 && flag_sirena == 1)
+  else if (sirena == 0 && getFlag(31) == 1)
   {
     delay(3000);
     if (digitalRead(SIRENAS) == 0)
     {
       publicarCambio(!sirena, 3);
-      flag_sirena = 0;
+      setFlag(31,sirena);
     }
   }
 }
@@ -404,6 +405,29 @@ String readFlash(int addr)
   }
   return str_lectura;
 }
+
+void setFlag(int addr, byte value){
+
+  /* 
+  * Las primeras 30 posiciones de la EEPROM (de la 0 a la 29) ya estan ocupadas
+  * Las banderas las guardo con el siguiente orden 
+  * 30 -> flag_central
+  * 31 -> flag_sirena
+  * 
+   */
+  EEPROM.writeByte(addr, value);
+  EEPROM.commit();
+}
+
+byte getFlag(int addr){
+  byte lectura;
+  lectura = EEPROM.readByte(addr);
+  if(lectura!=255){
+    return lectura;
+  }
+  return 0;
+}
+
 
 String getTopicToPublish(byte index)
 {
