@@ -20,7 +20,7 @@
 
 // CONFIG DEVICE
 String dId = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
-String webhook_pass = "";
+String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials";
 
 // MQTT
@@ -30,14 +30,14 @@ const char *mqtt_host = "192.168.1.108";
 // LECTURA DE SENSORES
 byte central;
 byte sirena;
-byte abertura;
+byte aberturas;
 byte interior;
 
 // FLAGS
-byte flag_central = 0;
-byte flag_sirena = 0;
-byte flag_aberturas = 0;
-byte flag_interior = 0;
+byte flag_central;
+byte flag_sirena;
+byte flag_aberturas;
+byte flag_interior;
 
 // GLOBALS
 
@@ -68,9 +68,10 @@ void checkEnterAP();
 void saveParamCallback();
 String getParam(String name);
 void changeStatusLed();
-
-void writeFlash(int addr, String valor);
-String readFlash(int addr);
+void writeFlash(int addr, String valor, int max_lenght);
+String readFlash(int addr, int max_lenght);
+void setFlag(int addr, byte value);
+byte getFlag(int addr);
 
 // Functiones Definitions (APPLICATION)
 void processSensors();
@@ -114,12 +115,14 @@ void setup()
   checkEnterAP();
   initialize();
 
+
   Serial.print(backgroundGreen + "\n\n LOOP RUNNING..." + fontReset);
 }
 
 void loop()
 {
   checkDeviceConnectivity();
+  delay(3000);
 }
 
 /* *************************************** */
@@ -127,7 +130,10 @@ void loop()
 /* -------- APPLICATION FUNCTIONS -------- */
 
 /* *************************************** */
-
+void setFlags(){
+  flag_central=EEPROM.readByte(200);
+  Serial.println("\n\n" + flag_central);
+}
 void processSensors()
 {
   /*
@@ -169,39 +175,38 @@ void detectarCambioCentral()
    *
    */
 
-  byte central = digitalRead(CENTRAL);
+  central = digitalRead(CENTRAL);
 
-  if (central == 1 && flag_central == 0)
+  if (central == 1 && getFlag(30) == 0)
   {
     publicarCambio(central, 0);
-    flag_central = 1;
+    setFlag(30, 1);
   }
 
-  else if (central == 0 && flag_central == 1)
+  else if (central == 0 && getFlag(30) == 1)
   {
     publicarCambio(central, 0);
-    flag_central = 0;
+    setFlag(30, 0);
   }
 }
 
 void detectarCambioSirena()
 {
 
-  // flag -> 0
-
   sirena = digitalRead(SIRENA);
 
-  if (sirena == 1 && flag_sirena == 0)
+  if (sirena == 1 && getFlag(31) == 0)
   {
     publicarCambio(!sirena, 3);
-    flag_sirena = 1;
+    setFlag(31,sirena);
   }
-  else if (sirena == 0 && flag_sirena == 1)
+  else if (sirena == 0 && getFlag(31) == 1)
   {
     delay(3000);
     if(digitalRead(SIRENA) == 0){
+      
       publicarCambio(!sirena, 3);
-      flag_sirena=0;
+      setFlag(31,sirena);
     
     }
   }
@@ -210,9 +215,7 @@ void detectarCambioSirena()
 void detectarCambioAberturas()
 {
 
-  
-
-  byte aberturas = digitalRead(ABERTURAS);
+  aberturas = digitalRead(ABERTURAS);
 
   if (aberturas == 1 && flag_aberturas == 0)
   {
@@ -229,7 +232,8 @@ void detectarCambioAberturas()
 void detectarCambioInterior()
 {
 
-  byte interior = digitalRead(INTERIOR);
+  interior = digitalRead(INTERIOR);
+
   if (interior == 1 && flag_interior == 0)
   {
     publicarCambio(interior, 5);
@@ -355,10 +359,10 @@ void processActuators()
   procesarComandosCentral();
 }
 
-void writeFlash(int addr, String valor)
+void writeFlash(int addr, String valor, int max_lenght)
 {
   int size = valor.length();
-  char inchar[15];
+  char inchar[max_lenght];
   valor.toCharArray(inchar, size + 1);
   // grabo caracter por caracter en cada celda de la EEPROM
   for (int i = 0; i < size; i++)
@@ -366,19 +370,19 @@ void writeFlash(int addr, String valor)
     EEPROM.write(addr + i, inchar[i]);
   }
   // si el tamaño de "valor" es menor que el limite maximo limpio las demas posiciones
-  for (int i = size; i < 15; i++)
+  for (int i = size; i < max_lenght; i++)
   {
     EEPROM.write(addr + i, 255);
   }
   EEPROM.commit();
 }
 
-String readFlash(int addr)
+String readFlash(int addr, int max_lenght)
 {
   byte lectura;
   String str_lectura;
   // leo 15 posiciones de memoria desde la posicion "addr"
-  for (int i = addr; i < addr + 15; i++)
+  for (int i = addr; i < addr + max_lenght; i++)
   {
     lectura = EEPROM.read(i);
     if (lectura != 255)
@@ -389,6 +393,27 @@ String readFlash(int addr)
   return str_lectura;
 }
 
+void setFlag(int addr, byte value){
+
+  /* 
+  * Las primeras 30 posiciones de la EEPROM (de la 0 a la 29) ya estan ocupadas
+  * Las banderas las guardo con el siguiente orden 
+  * 30 -> flag_central
+  * 31 -> flag_sirena
+  * 
+   */
+  EEPROM.writeByte(addr, value);
+  EEPROM.commit();
+}
+
+byte getFlag(int addr){
+  byte lectura;
+  lectura = EEPROM.readByte(addr);
+  if(lectura!=255){
+    return lectura;
+  }
+  return 0;
+}
 /* ************************************ */
 
 /* -------- TEMPLATE FUNCTIONS -------- */
@@ -516,8 +541,8 @@ void saveParamCallback()
 
   dId = getParam("deviceid");
   webhook_pass = getParam("whpasswordid");
-  writeFlash(0, dId);
-  writeFlash(15, webhook_pass);
+  writeFlash(0, dId,15);
+  writeFlash(15, webhook_pass,15);
 }
 
 void checkEnterAP()
@@ -785,7 +810,7 @@ void checkMqttConnection()
     client.loop();
     processSensors();
     //sendToBroker();
-    print_stats();
+    //print_stats();
     digitalWrite(CONNECTIVITY_STATUS, HIGH);
   }
 }
@@ -805,8 +830,8 @@ bool getMqttCredentiales()
   ticker.attach(0.5, changeStatusLed);
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
 
-  dId = readFlash(0);
-  webhook_pass = readFlash(15);
+  dId = readFlash(0, 15);
+  webhook_pass = readFlash(15,15);
   String toSend = "dId=" + dId + "&whpassword=" + webhook_pass;
 
   HTTPClient http;
