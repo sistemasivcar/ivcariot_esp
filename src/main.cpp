@@ -40,8 +40,6 @@ byte flag_aberturas = 0;
 byte flag_interior = 0;
 
 // GLOBALS
-long ultimoCambioSirenaDetectado;
-long ultimaLecturaSirena = 0;
 
 String last_received_topic = "";
 String last_received_msg = "";
@@ -189,7 +187,7 @@ void detectarCambioCentral()
 void detectarCambioSirena()
 {
 
-  long now = millis();
+  // flag -> 0
 
   sirena = digitalRead(SIRENA);
 
@@ -203,7 +201,7 @@ void detectarCambioSirena()
     delay(3000);
     if(digitalRead(SIRENA) == 0){
       publicarCambio(!sirena, 3);
-      ultimoCambioSirenaDetectado=millis();
+      flag_sirena=0;
     
     }
   }
@@ -212,7 +210,10 @@ void detectarCambioSirena()
 void detectarCambioAberturas()
 {
 
+  
+
   byte aberturas = digitalRead(ABERTURAS);
+
   if (aberturas == 1 && flag_aberturas == 0)
   {
     publicarCambio(aberturas, 4);
@@ -783,8 +784,8 @@ void checkMqttConnection()
 
     client.loop();
     processSensors();
-    sendToBroker();
-    // print_stats();
+    //sendToBroker();
+    print_stats();
     digitalWrite(CONNECTIVITY_STATUS, HIGH);
   }
 }
