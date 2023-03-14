@@ -42,7 +42,6 @@ byte flag_aberturas;
 
 // GLOBALS
 
-
 String last_received_topic = "";
 String last_received_msg = "";
 long varsLastSend[20];
@@ -180,13 +179,13 @@ void detectarCambioCentral()
   if (central == 1 && getFlag(30) == 0)
   {
     publicarCambio(central, 0);
-    setFlag(30,central);
+    setFlag(30, central);
   }
 
   else if (central == 0 && getFlag(30) == 1)
   {
     publicarCambio(central, 0);
-    setFlag(30,central);
+    setFlag(30, central);
   }
 }
 
@@ -198,7 +197,7 @@ void detectarCambioSirena()
   if (sirena == 1 && getFlag(31) == 0)
   {
     publicarCambio(!sirena, 3);
-    setFlag(31,sirena);
+    setFlag(31, sirena);
   }
   else if (sirena == 0 && getFlag(31) == 1)
   {
@@ -206,7 +205,7 @@ void detectarCambioSirena()
     if (digitalRead(SIRENAS) == 0)
     {
       publicarCambio(!sirena, 3);
-      setFlag(31,sirena);
+      setFlag(31, sirena);
     }
   }
 }
@@ -262,32 +261,42 @@ void processActuators()
 
 void procesarComandosCentral()
 {
-  /* 
-  * PROCESAMIENTO DE BOTONES: ACTIVAR - DESACTIVAR
-  *
-  * Aca estoy definiendo que hacer en caso de pulsar el boton de ACTIVAR en 
-  * la aplicacion, y lo mimsmo cuando se presiona DESACTIVAR
-  * 
-  * Cada uno manda un mensaje MQTT "activar" y "desactivar" que fueron configurados a la
-  * hora de crear el widget en la plantilla asociada al dispositivo
-  */
+  /*
+   * PROCESAMIENTO DE BOTONES: ACTIVAR - DESACTIVAR
+   *
+   * Aca estoy definiendo que hacer en caso de pulsar el boton de ACTIVAR en
+   * la aplicacion, y lo mimsmo cuando se presiona DESACTIVAR
+   *
+   * Cada uno manda un mensaje MQTT "activar" y "desactivar" que fueron configurados a la
+   * hora de crear el widget en la plantilla asociada al dispositivo
+   */
+
+  Serial.println(digitalRead(CENTRAL));
+  
 
   if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
   {
     // ACTIVAR ALARMA
-    digitalWrite(OUT, HIGH);
-    delay(1200);
-    digitalWrite(OUT, LOW);
+    if(digitalRead(CENTRAL)==LOW){
+      digitalWrite(OUT, HIGH);
+      delay(1200);
+      digitalWrite(OUT, LOW);
+    }
+    
     mqtt_data_doc["variables"][1]["last"]["value"] = "";
+    
   }
 
   else if (mqtt_data_doc["variables"][2]["last"]["value"] == "desactivar")
   {
     // DESACTIVAR ALARMA
-    digitalWrite(OUT, HIGH);
-    delay(1200);
-    digitalWrite(OUT, LOW);
+    if(digitalRead(CENTRAL)==HIGH){
+      digitalWrite(OUT, HIGH);
+      delay(1200);
+      digitalWrite(OUT, LOW);
 
+    }
+    
     mqtt_data_doc["variables"][2]["last"]["value"] = "";
   }
 }
@@ -417,28 +426,30 @@ String readFlash(int addr)
   return str_lectura;
 }
 
-void setFlag(int addr, byte value){
+void setFlag(int addr, byte value)
+{
 
-  /* 
-  * Las primeras 30 posiciones de la EEPROM (de la 0 a la 29) ya estan ocupadas
-  * Las banderas las guardo con el siguiente orden 
-  * 30 -> flag_central
-  * 31 -> flag_sirena
-  * 
+  /*
+   * Las primeras 30 posiciones de la EEPROM (de la 0 a la 29) ya estan ocupadas
+   * Las banderas las guardo con el siguiente orden
+   * 30 -> flag_central
+   * 31 -> flag_sirena
+   *
    */
   EEPROM.write(addr, value);
   EEPROM.commit();
 }
 
-byte getFlag(int addr){
+byte getFlag(int addr)
+{
   byte lectura;
   lectura = EEPROM.read(addr);
-  if(lectura!=255){
+  if (lectura != 255)
+  {
     return lectura;
   }
   return 0;
 }
-
 
 String getTopicToPublish(byte index)
 {
@@ -736,7 +747,8 @@ void checkWiFiConnection()
       WiFi.begin(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str());
     }
   }
-  else{
+  else
+  {
     checkMqttConnection();
   }
 }
@@ -779,7 +791,7 @@ void checkMqttConnection()
     client.loop();
     processSensors();
     sendToBroker();
-    // print_stats();
+    print_stats();
   }
 }
 
@@ -816,7 +828,7 @@ bool reconnect()
 
   bool mqttConnectionSuccess = client.connect(str_clientId.c_str(), username, password, will_topic.c_str(), 1, true, will_message.c_str(), false);
   ticker.detach();
-  
+
   if (mqttConnectionSuccess)
   {
 
@@ -833,7 +845,6 @@ bool reconnect()
   digitalWrite(CONNECTIVITY_STATUS, LOW);
   return false;
 }
-
 
 bool getMqttCredentiales()
 {
@@ -885,7 +896,6 @@ bool getMqttCredentiales()
     return true;
   }
 
-  
   return false;
 }
 
