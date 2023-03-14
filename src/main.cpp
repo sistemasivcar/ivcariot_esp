@@ -21,11 +21,11 @@
 // CONFIG DEVICE
 String dId = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
-String webhook_url = "http://192.168.1.108:3001/api/webhook/getdevicecredentials";
+String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
 
 // MQTT
 int mqtt_port = 1883;
-const char *mqtt_host = "192.168.1.108";
+const char *mqtt_host = "app.ivcariot.com";
 
 // LECTURA DE SENSORES
 byte central;
@@ -122,7 +122,6 @@ void setup()
 void loop()
 {
   checkDeviceConnectivity();
-  delay(3000);
 }
 
 /* *************************************** */
@@ -437,7 +436,7 @@ void setupMqttClient()
 
   client.setServer(mqtt_host, mqtt_port);
   client.setCallback(callback);
-  client.setKeepAlive(120);
+  client.setKeepAlive(300);
 }
 
 void setupWiFiManagerClient()
@@ -728,7 +727,7 @@ void checkWiFiConnection()
       lastWiFiConnectionAttempt = millis();
       Serial.print(Red + "\n\n         Ups WiFi Connection Failed :( ");
       Serial.print(underlinePurple + "\n\nTrying Connection Again to: ");
-      Serial.print(underlineWhite + boldWhite + wm.getWiFiSSID() + fontReset);
+      Serial.print(underlineWhite + boldWhite + wm.getWiFiSSID() + " -  " + wm.getWiFiPass()  +  fontReset);
       WiFi.begin(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str());
     }
   }
@@ -843,6 +842,9 @@ bool getMqttCredentiales()
 
   dId = readFlash(0, 15);
   webhook_pass = readFlash(15,15);
+  Serial.println(fontReset + "\nURL: " + webhook_url);
+  Serial.println("\ndId: " + dId + "\tpass: " + webhook_pass);
+
   String toSend = "dId=" + dId + "&whpassword=" + webhook_pass;
 
   HTTPClient http;
