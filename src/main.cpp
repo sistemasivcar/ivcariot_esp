@@ -730,6 +730,7 @@ bool reconnect()
 
   bool mqttConnectionSuccess = client.connect(str_clientId.c_str(), username, password, will_topic.c_str(), 1, true, will_message.c_str(), false);
 
+  ticker.detach();
   if (mqttConnectionSuccess)
   {
     // WE ARE CONNECTED TO THE MQTT BROKER
@@ -836,6 +837,7 @@ bool getMqttCredentiales()
    * para que luego pueda ser usado como variables de C++ (es un parseo)
    */
   ticker.attach(0.5, changeStatusLed);
+
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
 
   dId = readFlash(0, 15);
@@ -847,7 +849,7 @@ bool getMqttCredentiales()
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   // syncronous http request
   int response_code = http.POST(toSend);
-  ticker.detach();
+
 
   if (response_code < 0)
   {
