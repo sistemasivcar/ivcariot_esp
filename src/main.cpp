@@ -130,10 +130,7 @@ void loop()
 /* -------- APPLICATION FUNCTIONS -------- */
 
 /* *************************************** */
-void setFlags(){
-  flag_central=EEPROM.readByte(200);
-  Serial.println("\n\n" + flag_central);
-}
+
 void processSensors()
 {
   /*
