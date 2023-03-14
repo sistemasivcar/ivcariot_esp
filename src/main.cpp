@@ -701,56 +701,9 @@ void sendToBroker()
   }
 }
 
-bool reconnect()
-{
-
-  long now = millis();
-  if (now - lastRequestCredentilasAttempt > 5000)
-  {
-    lastRequestCredentilasAttempt = millis();
-    if (!getMqttCredentiales())
-    {
-      Serial.println(boldRed + "\n\n      Error getting mqtt credentials :( \n\n NEW ATTEMPT IN 5 SECONDS");
-      Serial.println(fontReset);
-      return false;
-    }
-  }
-
-  setupMqttClient();
-  Serial.print(underlinePurple + "\n\n\nTrying MQTT Connection" + fontReset + Purple + "  ⤵");
-  String str_clientId = "device_" + dId;
-  const char *username = mqtt_data_doc["username"];
-  const char *password = mqtt_data_doc["password"];
-  String str_topic = mqtt_data_doc["topic"];
-  String will_topic = str_topic + "dummy_var/status";
-  String will_message = "";
-  presence["offline"]["status"] = "offline";
-  presence["offline"]["name"] = mqtt_data_doc["device_name"];
-  serializeJson(presence["offline"], will_message);
-
-  bool mqttConnectionSuccess = client.connect(str_clientId.c_str(), username, password, will_topic.c_str(), 1, true, will_message.c_str(), false);
-
-  ticker.detach();
-  if (mqttConnectionSuccess)
-  {
-    // WE ARE CONNECTED TO THE MQTT BROKER
-    Serial.print(boldGreen + "\n\n         Mqtt Client Connected :) " + fontReset);
-    reportPresence();
-    delay(2000);
-    client.subscribe((str_topic + "+/actdata").c_str());
-    ticker.detach();
-    digitalWrite(CONNECTIVITY_STATUS, HIGH);
-    return true;
-  }
-  digitalWrite(CONNECTIVITY_STATUS, LOW);
-  Serial.print(boldRed + "\n\n         Mqtt Client Connection Failed :( " + fontReset);
-  return false;
-}
-
 void checkDeviceConnectivity()
 {
   checkWiFiConnection();
-  checkMqttConnection();
 }
 
 void checkWiFiConnection()
@@ -779,6 +732,9 @@ void checkWiFiConnection()
       WiFi.begin(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str());
     }
   }
+  else{
+    checkMqttConnection();
+  }
 }
 
 void checkMqttConnection()
@@ -791,7 +747,7 @@ void checkMqttConnection()
    *
    */
 
-  if (!client.connected() && WiFi.status() == WL_CONNECTED)
+  if (!client.connected())  
   {
     long now = millis();
 
@@ -822,6 +778,51 @@ void checkMqttConnection()
     //print_stats();
     digitalWrite(CONNECTIVITY_STATUS, HIGH);
   }
+}
+
+bool reconnect()
+{
+
+  long now = millis();
+  if (now - lastRequestCredentilasAttempt > 5000)
+  {
+    lastRequestCredentilasAttempt = millis();
+    if (!getMqttCredentiales())
+    {
+      Serial.println(boldRed + "\n\n      Error getting mqtt credentials :( \n      INTENTANDO EN 5 SEG...");
+      Serial.println(fontReset);
+      return false;
+    }
+  }
+
+  setupMqttClient();
+  Serial.print(underlinePurple + "\n\n\nTrying MQTT Connection" + fontReset + Purple + "  ⤵");
+  String str_clientId = "device_" + dId;
+  const char *username = mqtt_data_doc["username"];
+  const char *password = mqtt_data_doc["password"];
+  String str_topic = mqtt_data_doc["topic"];
+  String will_topic = str_topic + "dummy_var/status";
+  String will_message = "";
+  presence["offline"]["status"] = "offline";
+  presence["offline"]["name"] = mqtt_data_doc["device_name"];
+  serializeJson(presence["offline"], will_message);
+
+  bool mqttConnectionSuccess = client.connect(str_clientId.c_str(), username, password, will_topic.c_str(), 1, true, will_message.c_str(), false);
+
+  ticker.detach();
+  if (mqttConnectionSuccess)
+  {
+    // WE ARE CONNECTED TO THE MQTT BROKER
+    Serial.print(boldGreen + "\n\n         Mqtt Client Connected :) " + fontReset);
+    reportPresence();
+    delay(2000);
+    client.subscribe((str_topic + "+/actdata").c_str());
+    digitalWrite(CONNECTIVITY_STATUS, HIGH);
+    return true;
+  }
+  digitalWrite(CONNECTIVITY_STATUS, LOW);
+  Serial.print(boldRed + "\n\n         Mqtt Client Connection Failed :( " + fontReset);
+  return false;
 }
 
 bool getMqttCredentiales()
