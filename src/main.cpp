@@ -242,6 +242,7 @@ void detectarCambioInterior()
     flag_interior = 0;
   }
 }
+
 void processActuators()
 {
   /*
@@ -261,6 +262,16 @@ void processActuators()
 
 void procesarComandosCentral()
 {
+  /* 
+  * PROCESAMIENTO DE BOTONES: ACTIVAR - DESACTIVAR
+  *
+  * Aca estoy definiendo que hacer en caso de pulsar el boton de ACTIVAR en 
+  * la aplicacion, y lo mimsmo cuando se presiona DESACTIVAR
+  * 
+  * Cada uno manda un mensaje MQTT "activar" y "desactivar" que fueron configurados a la
+  * hora de crear el widget en la plantilla asociada al dispositivo
+  */
+
   if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
   {
     // ACTIVAR ALARMA
@@ -415,13 +426,13 @@ void setFlag(int addr, byte value){
   * 31 -> flag_sirena
   * 
    */
-  EEPROM.writeByte(addr, value);
+  EEPROM.write(addr, value);
   EEPROM.commit();
 }
 
 byte getFlag(int addr){
   byte lectura;
-  lectura = EEPROM.readByte(addr);
+  lectura = EEPROM.read(addr);
   if(lectura!=255){
     return lectura;
   }
@@ -559,7 +570,7 @@ void checkEnterAP()
     Serial.print("  ⤵" + fontReset);
     Serial.print(boldWhite + "\nSSID:" + fontReset + "IvcarIoT");
     Serial.print(boldWhite + "\nPASS:" + fontReset + "12345678");
-    ticker.attach(0.1, changeStatusLed);
+    ticker.attach(0.2, changeStatusLed);
 
     wm.startConfigPortal("IvcarIoT"); // loop is blocked
 
