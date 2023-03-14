@@ -41,8 +41,7 @@ byte flag_interior = 0;
 byte flag_aberturas = 0;
 
 // GLOBALS
-long ultimaLecturaCentral = 0;
-long ultimaLecturaSirena = 0;
+
 
 String last_received_topic = "";
 String last_received_msg = "";
@@ -154,14 +153,9 @@ void processSensors()
    */
 
   long now = millis();
+
   detectarCambioCentral();
-
-  if (now - ultimaLecturaSirena > 5000)
-  {
-    ultimaLecturaSirena = millis();
-    detectarCambioSirena();
-  }
-
+  detectarCambioSirena();
   detectarCambioInterior();
   detectarCambioAberturas();
 }
@@ -211,6 +205,7 @@ void detectarCambioSirena()
     if (digitalRead(SIRENAS) == 0)
     {
       publicarCambio(!sirena, 3);
+      flag_sirena = 0;
     }
   }
 }
@@ -357,7 +352,7 @@ void initialize()
   bool wifiConnectionSuccess;
 
   Serial.print(underlinePurple + "\n\nWiFi Connection in Progress..." + fontReset + Purple);
-  ticker.attach(0.7, changeStatusLed);
+  ticker.attach(0.5, changeStatusLed);
   wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
   ticker.detach();
 
@@ -366,6 +361,7 @@ void initialize()
     Serial.print("  ⤵" + fontReset);
     Serial.print(boldGreen + "\n\n         WiFi Connection SUCCESS :)" + fontReset);
     digitalWrite(CONNECTIVITY_STATUS, HIGH);
+    delay(5000);
   }
   else
   {
@@ -705,10 +701,7 @@ bool reconnect()
   presence["offline"]["name"] = mqtt_data_doc["device_name"];
   serializeJson(presence["offline"], will_message);
 
-  ticker.attach(0.7, changeStatusLed);
-
   bool mqttConnectionSuccess = client.connect(str_clientId.c_str(), username, password, will_topic.c_str(), 1, true, will_message.c_str(), false);
-
   ticker.detach();
   if (mqttConnectionSuccess)
   {
@@ -758,10 +751,6 @@ void checkWiFiConnection()
       Serial.print(underlineWhite + boldWhite + wm.getWiFiSSID() + fontReset);
       WiFi.begin(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str());
     }
-  }
-  else
-  {
-    digitalWrite(CONNECTIVITY_STATUS, HIGH);
   }
 }
 
@@ -820,7 +809,7 @@ bool getMqttCredentiales()
    * para que luego pueda ser usado como variables de C++ (es un parseo)
    */
 
-  ticker.attach(0.7, changeStatusLed);
+  ticker.attach(0.5, changeStatusLed);
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
 
   dId = readFlash(0);
@@ -833,12 +822,10 @@ bool getMqttCredentiales()
   // syncronous http request
   int response_code = http.POST(toSend);
 
-  ticker.detach();
   if (response_code < 0)
   {
     Serial.print(boldRed + "\n\n         Error Sending Post Request :( " + fontReset);
     http.end();
-    digitalWrite(CONNECTIVITY_STATUS, LOW);
     return false;
   }
 
@@ -846,7 +833,6 @@ bool getMqttCredentiales()
   {
     Serial.print(boldRed + "\n\n         Error in response :(   e-> " + fontReset + " " + response_code);
     http.end();
-    digitalWrite(CONNECTIVITY_STATUS, LOW);
     return false;
   }
 
@@ -856,13 +842,11 @@ bool getMqttCredentiales()
     Serial.print(boldGreen + "\n\n         Mqtt Credentials Obtained Successfully :) " + fontReset);
     http.end();
     deserializeJson(mqtt_data_doc, response_body);
-    mqtt_data_doc["obtained"] = "yes";
     delay(3000);
-    digitalWrite(CONNECTIVITY_STATUS, HIGH);
     return true;
   }
 
-  digitalWrite(CONNECTIVITY_STATUS, LOW);
+  
   return false;
 }
 
