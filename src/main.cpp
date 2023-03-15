@@ -299,7 +299,7 @@ void publicarCambio(byte lectura, byte index)
   String str_topic = getTopicToPublish(index);
   String message_to_send = serializeMesageToSend(index, lectura, true);
   client.publish(str_topic.c_str(), message_to_send.c_str(), true);
-  incrementCounter(0);
+  incrementCounter(index);
 }
 
 void incrementCounter(byte index)
