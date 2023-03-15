@@ -19,7 +19,7 @@
 #define OUT 13
 
 // CONFIG DEVICE
-String dId = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
+String dId = "";          // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
 
@@ -115,7 +115,6 @@ void setup()
   checkEnterAP();
   initialize();
 
-
   Serial.print(backgroundGreen + "\n\n LOOP RUNNING..." + fontReset);
 }
 
@@ -194,16 +193,16 @@ void detectarCambioSirena()
   if (sirena == 1 && getFlag(31) == 0)
   {
     publicarCambio(!sirena, 3);
-    setFlag(31,sirena);
+    setFlag(31, sirena);
   }
   else if (sirena == 0 && getFlag(31) == 1)
   {
     delay(3000);
-    if(digitalRead(SIRENA) == 0){
-      
+    if (digitalRead(SIRENA) == 0)
+    {
+
       publicarCambio(!sirena, 3);
-      setFlag(31,sirena);
-    
+      setFlag(31, sirena);
     }
   }
 }
@@ -318,37 +317,39 @@ void incrementCounter(byte index)
 
 void procesarComandosCentral()
 {
-  /* 
-  * PROCESAMIENTO DE BOTONES: ACTIVAR - DESACTIVAR
-  *
-  * Aca estoy definiendo que hacer en caso de pulsar el boton de ACTIVAR en 
-  * la aplicacion, y lo mimsmo cuando se presiona DESACTIVAR
-  * 
-  * Cada uno manda un mensaje MQTT "activar" y "desactivar" que fueron configurados a la
-  * hora de crear el widget en la plantilla asociada al dispositivo
-  */
+  /*
+   * PROCESAMIENTO DE BOTONES: ACTIVAR - DESACTIVAR
+   *
+   * Aca estoy definiendo que hacer en caso de pulsar el boton de ACTIVAR en
+   * la aplicacion, y lo mimsmo cuando se presiona DESACTIVAR
+   *
+   * Cada uno manda un mensaje MQTT "activar" y "desactivar" que fueron configurados a la
+   * hora de crear el widget en la plantilla asociada al dispositivo
+   */
 
   if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
   {
     // ACTIVAR ALARMA
-    if(digitalRead(CENTRAL)==LOW){
+    if (digitalRead(CENTRAL) == LOW)
+    {
       digitalWrite(OUT, HIGH);
       delay(1200);
       digitalWrite(OUT, LOW);
     }
-    
+
     mqtt_data_doc["variables"][1]["last"]["value"] = "";
   }
 
   else if (mqtt_data_doc["variables"][2]["last"]["value"] == "desactivar")
   {
     // DESACTIVAR ALARMA
-    if(digitalRead(CENTRAL)==HIGH){
+    if (digitalRead(CENTRAL) == HIGH)
+    {
       digitalWrite(OUT, HIGH);
       delay(1200);
       digitalWrite(OUT, LOW);
     }
-    
+
     mqtt_data_doc["variables"][1]["last"]["value"] = "";
   }
 }
@@ -404,23 +405,26 @@ String readFlash(int addr, int max_lenght)
   return str_lectura;
 }
 
-void setFlag(int addr, byte value){
+void setFlag(int addr, byte value)
+{
 
-  /* 
-  * Las primeras 30 posiciones de la EEPROM (de la 0 a la 29) ya estan ocupadas
-  * Las banderas las guardo con el siguiente orden 
-  * 30 -> flag_central
-  * 31 -> flag_sirena
-  * 
+  /*
+   * Las primeras 30 posiciones de la EEPROM (de la 0 a la 29) ya estan ocupadas
+   * Las banderas las guardo con el siguiente orden
+   * 30 -> flag_central
+   * 31 -> flag_sirena
+   *
    */
   EEPROM.writeByte(addr, value);
   EEPROM.commit();
 }
 
-byte getFlag(int addr){
+byte getFlag(int addr)
+{
   byte lectura;
   lectura = EEPROM.readByte(addr);
-  if(lectura!=255){
+  if (lectura != 255)
+  {
     return lectura;
   }
   return 0;
@@ -553,8 +557,8 @@ void saveParamCallback()
 
   dId = getParam("deviceid");
   webhook_pass = getParam("whpasswordid");
-  writeFlash(0, dId,15);
-  writeFlash(15, webhook_pass,15);
+  writeFlash(0, dId, 15);
+  writeFlash(15, webhook_pass, 15);
 }
 
 void checkEnterAP()
@@ -673,37 +677,15 @@ void sendToBroker()
    */
 
   long now = millis();
-
-  for (int i = 0; i < mqtt_data_doc["variables"].size(); i++)
+  if (now - varsLastSend[0] > 50000)
   {
-    String variableType = mqtt_data_doc["variables"][i]["variableType"];
-    String sendMethod = mqtt_data_doc["variables"][i]["sendMethod"];
+    varsLastSend[0]=millis();
 
-    if (variableType == "output" || (variableType == "input" && sendMethod == "change_status"))
-    {
-      continue;
-    }
-    // "input" variable type
-    int send_freq = mqtt_data_doc["variables"][i]["variableSendFreq"];
-
-    if (now - varsLastSend[i] > send_freq * 1000)
-    {
-      varsLastSend[i] = millis();
-      String str_root_topic = mqtt_data_doc["topic"];
-      String str_variable = mqtt_data_doc["variables"][i]["variable"];
-      String str_topic = str_root_topic + str_variable + "/sdata"; // ex: uid/did/var/sdata
-      String toSend = "";
-
-      serializeJson(mqtt_data_doc["variables"][i]["last"], toSend);
-      // ex: toSend = "{"value":3}"
-
-      client.publish(str_topic.c_str(), toSend.c_str(), true); // retained msg
-      long counter = mqtt_data_doc["variables"][i]["counter"];
-      counter++;
-      mqtt_data_doc["variables"][i]["counter"] = counter;
-    }
+    client.publish("PINGREQ", "");
+    Serial.println("PINREQ SEND!");
   }
 }
+
 
 void checkDeviceConnectivity()
 {
@@ -732,11 +714,12 @@ void checkWiFiConnection()
       lastWiFiConnectionAttempt = millis();
       Serial.print(Red + "\n\n         Ups WiFi Connection Failed :( ");
       Serial.print(underlinePurple + "\n\nTrying Connection Again to: ");
-      Serial.print(underlineWhite + boldWhite + wm.getWiFiSSID() + " -  " + wm.getWiFiPass()  +  fontReset);
+      Serial.print(underlineWhite + boldWhite + wm.getWiFiSSID() + " -  " + wm.getWiFiPass() + fontReset);
       WiFi.begin(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str());
     }
   }
-  else{
+  else
+  {
     checkMqttConnection();
   }
 }
@@ -751,7 +734,7 @@ void checkMqttConnection()
    *
    */
 
-  if (!client.connected())  
+  if (!client.connected())
   {
     long now = millis();
 
@@ -778,8 +761,8 @@ void checkMqttConnection()
 
     client.loop();
     processSensors();
-    //sendToBroker();
-    //print_stats();
+    sendToBroker();
+    // print_stats();
     digitalWrite(CONNECTIVITY_STATUS, HIGH);
   }
 }
@@ -846,7 +829,7 @@ bool getMqttCredentiales()
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
 
   dId = readFlash(0, 15);
-  webhook_pass = readFlash(15,15);
+  webhook_pass = readFlash(15, 15);
   Serial.println(fontReset + "\nURL: " + webhook_url);
   Serial.println("\ndId: " + dId + "\tpass: " + webhook_pass);
 
@@ -857,7 +840,6 @@ bool getMqttCredentiales()
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   // syncronous http request
   int response_code = http.POST(toSend);
-
 
   if (response_code < 0)
   {
