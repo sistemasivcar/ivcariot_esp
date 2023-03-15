@@ -22,7 +22,7 @@
 // CONFIG DEVICE
 String dId = "";          // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
-String webhook_url = "http://192.168.0.8:3001/api/webhook/getdevicecredentials";
+String webhook_url = "http://192.168.0.8:E/api/webhook/getdevicecredentials";
 
 // MQTT
 int mqtt_port = 1883;
@@ -791,8 +791,8 @@ void checkMqttConnection()
 
     client.loop();
     processSensors();
-    sendToBroker();
-    print_stats();
+    // sendToBroker(); no es necesario activar esta funcion para este dispositivo!
+    // print_stats();
   }
 }
 
