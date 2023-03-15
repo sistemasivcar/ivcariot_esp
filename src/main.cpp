@@ -445,7 +445,7 @@ void setupMqttClient()
 
   client.setServer(mqtt_host, mqtt_port);
   client.setCallback(callback);
-  client.setKeepAlive(300);
+  client.setKeepAlive(120);
 }
 
 void setupWiFiManagerClient()
@@ -677,12 +677,35 @@ void sendToBroker()
    */
 
   long now = millis();
-  if (now - varsLastSend[0] > 50000)
-  {
-    varsLastSend[0]=millis();
 
-    client.publish("PINGREQ", "");
-    Serial.println("PINREQ SEND!");
+  for (int i = 0; i < mqtt_data_doc["variables"].size(); i++)
+  {
+    String variableType = mqtt_data_doc["variables"][i]["variableType"];
+    String sendMethod = mqtt_data_doc["variables"][i]["sendMethod"];
+
+    if (variableType == "output" || (variableType == "input" && sendMethod == "change_status"))
+    {
+      continue;
+    }
+    // "input" variable type
+    int send_freq = mqtt_data_doc["variables"][i]["variableSendFreq"];
+
+    if (now - varsLastSend[i] > send_freq * 1000)
+    {
+      varsLastSend[i] = millis();
+      String str_root_topic = mqtt_data_doc["topic"];
+      String str_variable = mqtt_data_doc["variables"][i]["variable"];
+      String str_topic = str_root_topic + str_variable + "/sdata"; // ex: uid/did/var/sdata
+      String toSend = "";
+
+      serializeJson(mqtt_data_doc["variables"][i]["last"], toSend);
+      // ex: toSend = "{"value":3}"
+
+      client.publish(str_topic.c_str(), toSend.c_str(), true); // retained msg
+      long counter = mqtt_data_doc["variables"][i]["counter"];
+      counter++;
+      mqtt_data_doc["variables"][i]["counter"] = counter;
+    }
   }
 }
 
@@ -761,7 +784,7 @@ void checkMqttConnection()
 
     client.loop();
     processSensors();
-    sendToBroker();
+    // sendToBroker(); // no es necesario activar esta funcion para este dispositivo!
     // print_stats();
     digitalWrite(CONNECTIVITY_STATUS, HIGH);
   }
