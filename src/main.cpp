@@ -16,18 +16,18 @@
 #define SIRENAS 12
 #define INTERIOR 04
 #define ABERTURAS 13
-#define OUT 05
+#define OUT 05466f83479d3eba70d6c6d6c0f4748b0e79545d61
 #define TX 02
 
 // CONFIG DEVICE
 String dId = "";          // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
-//String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
-String webhook_url = "https://192.168.0.8:3001/api/webhook/getdevicecredentials";
+String webhook_url = "http://ivcariot.com:3001/api/webhook/getdevicecredentials";
+//String webhook_url = "https://192.168.0.8:3001/api/webhook/getdevicecredentials";
 
 // MQTT
 int mqtt_port = 1883;
-const char *mqtt_host = "192.168.0.8";
+const char *mqtt_host = "app.ivcariot.com";
 //const char *mqtt_host = "app.ivcariot.com";
 
 // LECTURA DE SENSORES
