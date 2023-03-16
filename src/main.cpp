@@ -71,6 +71,9 @@ void checkEnterAP();
 void saveParamCallback();
 String getParam(String name);
 void changeStatusLed();
+
+
+// Functiones Definitions (AUXILIAR)
 void writeFlash(int addr, String valor);
 String readFlash(int addr);
 void setFlag(int addr, byte flag);
@@ -304,96 +307,12 @@ void procesarComandosCentral()
   }
 }
 
-/* ************************************ */
 
-/* -------- TEMPLATE FUNCTIONS -------- */
+/* *************************************** */
 
-/* ************************************ */
+/* -------- AUXILIAR FUNCTIONS ----------- */
 
-void setupMqttClient()
-{
-
-  /*
-   * We configure parameters for the MQTT instance
-   */
-
-  client.setServer(mqtt_host, mqtt_port);
-  client.setCallback(callback);
-  client.setKeepAlive(120);
-}
-
-void setupWiFiManagerClient()
-{
-
-  /*
-   * We configure parameters for the WiFiManager instance
-   */
-
-  wm.setDebugOutput(false);
-  wm.setConnectTimeout(20);
-  wm.setCountry("AR");
-  wm.setConfigPortalTimeout(120);  // duracion del AP
-  wm.setBreakAfterConfig(true);    // always exit configportal even if wifi save fails
-  wm.setEnableConfigPortal(false); // if true (default) then start the config portal from autoConnect if connection failed
-
-  // Web Styles
-  wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
-  wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
-  wm.setShowInfoErase(true);       // show erase (borrar) button on info page
-  wm.setScanDispPerc(true);        // show RSSI as percentage not graph icons
-
-  wm.setTitle("IVCAR IoT");
-  wm.setCustomHeadElement("Device Managment - IvcarIoT");
-
-  const char *mqtt_did_input_str = "<br/><label for='deviceid'>DEVICE ID</label><input type='text' name='deviceid' placeholder='Enter your own dId'>";
-  const char *mqtt_whpassword_input_str = "<br/><label for='whpasswordid'>DEVICE PASSWORD</label><input type='text' name='whpasswordid' placeholder='Enter the password'>";
-
-  new (&custom_param_dId) WiFiManagerParameter(mqtt_did_input_str);
-  new (&custom_param_whpassword) WiFiManagerParameter(mqtt_whpassword_input_str);
-
-  wm.addParameter(&custom_param_dId);
-  wm.addParameter(&custom_param_whpassword);
-
-  wm.setSaveParamsCallback(saveParamCallback);
-
-  std::vector<const char *> menu = {"wifi", "info", "param", "sep", "restart", "exit"};
-  wm.setMenu(menu);
-}
-
-void initialize()
-{
-
-  /*
-   * Aca hacemos el primer intento de conexion WIFI.
-   *
-   * Si hay credenciales guardadas, inicia la conexion con eso.
-   * Si la conexion falla, seguimos intentado (de forma no bloqueante) en el loop.
-   *
-   * Si no nunca se configuraron las credenciales, ni siquiera intenta una conexion y
-   * entra directamente al else y luego se va al loop
-   */
-
-  bool wifiConnectionSuccess;
-
-  Serial.print(underlinePurple + "\n\nWiFi Connection in Progress..." + fontReset + Purple);
-  ticker.attach(0.5, changeStatusLed);
-  wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
-  ticker.detach();
-
-  if (wifiConnectionSuccess)
-  {
-    Serial.print("  ⤵" + fontReset);
-    Serial.print(boldGreen + "\n\n         WiFi Connection SUCCESS :)" + fontReset);
-    digitalWrite(CONNECTIVITY_STATUS, HIGH);
-    delay(5000);
-  }
-  else
-  {
-    Serial.print("  ⤵" + fontReset);
-    Serial.print(Red + "\n\n         Ups WiFi Connection Failed :( " + fontReset);
-    digitalWrite(CONNECTIVITY_STATUS, LOW);
-  }
-}
+/* *************************************** */
 
 void writeFlash(int addr, String valor)
 {
@@ -526,6 +445,98 @@ void incrementCounter(byte index)
   long counter = mqtt_data_doc["variables"][index]["counter"];
   counter++;
   mqtt_data_doc["variables"][index]["counter"] = counter;
+}
+
+
+/* ************************************ */
+
+/* -------- TEMPLATE FUNCTIONS -------- */
+
+/* ************************************ */
+
+void setupMqttClient()
+{
+
+  /*
+   * We configure parameters for the MQTT instance
+   */
+
+  client.setServer(mqtt_host, mqtt_port);
+  client.setCallback(callback);
+  client.setKeepAlive(120);
+}
+
+void setupWiFiManagerClient()
+{
+
+  /*
+   * We configure parameters for the WiFiManager instance
+   */
+
+  wm.setDebugOutput(false);
+  wm.setConnectTimeout(20);
+  wm.setCountry("AR");
+  wm.setConfigPortalTimeout(120);  // duracion del AP
+  wm.setBreakAfterConfig(true);    // always exit configportal even if wifi save fails
+  wm.setEnableConfigPortal(false); // if true (default) then start the config portal from autoConnect if connection failed
+
+  // Web Styles
+  wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
+  wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
+  wm.setShowInfoErase(true);       // show erase (borrar) button on info page
+  wm.setScanDispPerc(true);        // show RSSI as percentage not graph icons
+
+  wm.setTitle("IVCAR IoT");
+  wm.setCustomHeadElement("Device Managment - IvcarIoT");
+
+  const char *mqtt_did_input_str = "<br/><label for='deviceid'>DEVICE ID</label><input type='text' name='deviceid' placeholder='Enter your own dId'>";
+  const char *mqtt_whpassword_input_str = "<br/><label for='whpasswordid'>DEVICE PASSWORD</label><input type='text' name='whpasswordid' placeholder='Enter the password'>";
+
+  new (&custom_param_dId) WiFiManagerParameter(mqtt_did_input_str);
+  new (&custom_param_whpassword) WiFiManagerParameter(mqtt_whpassword_input_str);
+
+  wm.addParameter(&custom_param_dId);
+  wm.addParameter(&custom_param_whpassword);
+
+  wm.setSaveParamsCallback(saveParamCallback);
+
+  std::vector<const char *> menu = {"wifi", "info", "param", "sep", "restart", "exit"};
+  wm.setMenu(menu);
+}
+
+void initialize()
+{
+
+  /*
+   * Aca hacemos el primer intento de conexion WIFI.
+   *
+   * Si hay credenciales guardadas, inicia la conexion con eso.
+   * Si la conexion falla, seguimos intentado (de forma no bloqueante) en el loop.
+   *
+   * Si no nunca se configuraron las credenciales, ni siquiera intenta una conexion y
+   * entra directamente al else y luego se va al loop
+   */
+
+  bool wifiConnectionSuccess;
+
+  Serial.print(underlinePurple + "\n\nWiFi Connection in Progress..." + fontReset + Purple);
+  ticker.attach(0.5, changeStatusLed);
+  wifiConnectionSuccess = wm.autoConnect("IvcarIoT"); // blocking
+  ticker.detach();
+
+  if (wifiConnectionSuccess)
+  {
+    Serial.print("  ⤵" + fontReset);
+    Serial.print(boldGreen + "\n\n         WiFi Connection SUCCESS :)" + fontReset);
+    digitalWrite(CONNECTIVITY_STATUS, HIGH);
+    delay(5000);
+  }
+  else
+  {
+    Serial.print("  ⤵" + fontReset);
+    Serial.print(Red + "\n\n         Ups WiFi Connection Failed :( " + fontReset);
+    digitalWrite(CONNECTIVITY_STATUS, LOW);
+  }
 }
 
 void changeStatusLed()
