@@ -21,11 +21,13 @@
 // CONFIG DEVICE
 String dId = "";          // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
-String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
+String webhook_url = "http://192.168.0.8:3001/api/webhook/getdevicecredentials";
+//String webhook_url = "http://app.ivcariot.com:3002/api/webhook/getdevicecredentials";
 
 // MQTT
 int mqtt_port = 1883;
-const char *mqtt_host = "app.ivcariot.com";
+//const char *mqtt_host = "app.ivcariot.com";
+const char *mqtt_host = "192.168.0.8";
 
 // LECTURA DE SENSORES
 byte central;
@@ -241,6 +243,68 @@ void detectarCambioInterior()
   }
 }
 
+void processActuators()
+{
+  /*
+   * MANJEO DE LAS VARIABLES DE SALIDA
+   *
+   * Esta funcion es llamada automaticamente cada vez que recibas un mensaje MQTT. El contenido de
+   * ese mensaje lo vas a encontrar en: mqtt_data_doc["variables"][index]["last"]["value"] y tenes
+   * que ASEGURARTE de que "index" sea el indice que ocupa esa variable en el array
+   * de widgets de la plantlla asociada al dispositivo
+   *
+   * Recordá que el conteido del mensaje lo configuraste a la hora de crear la plantilla, asique debe conincidir
+   * en tu código para saber QUÉ HACER CUANDO RECIBAS TAL MENSAJE
+   */
+
+  procesarComandosCentral();
+}
+
+void procesarComandosCentral()
+{
+  /*
+   * PROCESAMIENTO DE BOTONES: ACTIVAR - DESACTIVAR
+   *
+   * Aca estoy definiendo que hacer en caso de pulsar el boton de ACTIVAR en
+   * la aplicacion, y lo mimsmo cuando se presiona DESACTIVAR
+   *
+   * Cada uno manda un mensaje MQTT "activar" y "desactivar" que fueron configurados a la
+   * hora de crear el widget en la plantilla asociada al dispositivo
+   */
+
+  if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
+  {
+    // ACTIVAR ALARMA
+    if (digitalRead(CENTRAL) == LOW)
+    {
+      digitalWrite(OUT, HIGH);
+      delay(1200);
+      digitalWrite(OUT, LOW);
+    }
+
+    mqtt_data_doc["variables"][1]["last"]["value"] = "";
+  }
+
+  else if (mqtt_data_doc["variables"][2]["last"]["value"] == "desactivar")
+  {
+    // DESACTIVAR ALARMA
+    if (digitalRead(CENTRAL) == HIGH)
+    {
+      digitalWrite(OUT, HIGH);
+      delay(1200);
+      digitalWrite(OUT, LOW);
+    }
+
+    mqtt_data_doc["variables"][1]["last"]["value"] = "";
+  }
+}
+
+/* ************************************ */
+
+/* -------- AUXILIAR FUNCTIONS -------- */
+
+/* ************************************ */
+
 String getTopicToPublish(byte index)
 {
   /*
@@ -315,62 +379,6 @@ void incrementCounter(byte index)
   mqtt_data_doc["variables"][index]["counter"] = counter;
 }
 
-void procesarComandosCentral()
-{
-  /*
-   * PROCESAMIENTO DE BOTONES: ACTIVAR - DESACTIVAR
-   *
-   * Aca estoy definiendo que hacer en caso de pulsar el boton de ACTIVAR en
-   * la aplicacion, y lo mimsmo cuando se presiona DESACTIVAR
-   *
-   * Cada uno manda un mensaje MQTT "activar" y "desactivar" que fueron configurados a la
-   * hora de crear el widget en la plantilla asociada al dispositivo
-   */
-
-  if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
-  {
-    // ACTIVAR ALARMA
-    if (digitalRead(CENTRAL) == LOW)
-    {
-      digitalWrite(OUT, HIGH);
-      delay(1200);
-      digitalWrite(OUT, LOW);
-    }
-
-    mqtt_data_doc["variables"][1]["last"]["value"] = "";
-  }
-
-  else if (mqtt_data_doc["variables"][2]["last"]["value"] == "desactivar")
-  {
-    // DESACTIVAR ALARMA
-    if (digitalRead(CENTRAL) == HIGH)
-    {
-      digitalWrite(OUT, HIGH);
-      delay(1200);
-      digitalWrite(OUT, LOW);
-    }
-
-    mqtt_data_doc["variables"][1]["last"]["value"] = "";
-  }
-}
-
-void processActuators()
-{
-  /*
-   * MANJEO DE LAS VARIABLES DE SALIDA
-   *
-   * Esta funcion es llamada automaticamente cada vez que recibas un mensaje MQTT. El contenido de
-   * ese mensaje lo vas a encontrar en: mqtt_data_doc["variables"][index]["last"]["value"] y tenes
-   * que ASEGURARTE de que "index" sea el indice que ocupa esa variable en el array
-   * de widgets de la plantlla asociada al dispositivo
-   *
-   * Recordá que el conteido del mensaje lo configuraste a la hora de crear la plantilla, asique debe conincidir
-   * en tu código para saber QUÉ HACER CUANDO RECIBAS TAL MENSAJE
-   */
-
-  procesarComandosCentral();
-}
-
 void writeFlash(int addr, String valor, int max_lenght)
 {
   int size = valor.length();
@@ -409,7 +417,7 @@ void setFlag(int addr, byte value)
 {
 
   /*
-   * Las primeras 30 posiciones de la EEPROM (de la 0 a la 29) ya estan ocupadas
+   * Las primeras 30 posiciones de la EEPROM (de la 0 a la 29) ya estan ocupadas por dId y webwook_password
    * Las banderas las guardo con el siguiente orden
    * 30 -> flag_central
    * 31 -> flag_sirena
@@ -445,7 +453,9 @@ void setupMqttClient()
 
   client.setServer(mqtt_host, mqtt_port);
   client.setCallback(callback);
-  client.setKeepAlive(120);
+  // este timeout podria ser dinámico (no mayor a 600s! se corta la
+  // conexion por el balanceador de cargas)
+  client.setKeepAlive(120); 
 }
 
 void setupWiFiManagerClient()
@@ -583,25 +593,6 @@ void checkEnterAP()
   }
 }
 
-void reportPresence()
-{
-  /*
-   * Publico mensaje MQTT (retenido) avisando que el dispositivo se encuentra ONLINE.
-   * Esto se ejecuta cada vez que el dispoistivo se conecta al BROKER, ya sea la primera
-   * vez que se conecta o por cada reconexión (El el backend envio notificacion SOLO SI
-   * EL DISPOSITIVO CAMBIÓ DE ONLINE A OFFLINE o viceversa)
-   */
-
-  String root_topic = mqtt_data_doc["topic"];
-  String topic = root_topic + "dummy_var/status";
-  String toSend = "";
-  presence["online"]["status"] = "online";
-  presence["online"]["name"] = mqtt_data_doc["device_name"];
-  serializeJson(presence["online"], toSend);
-  client.publish(topic.c_str(), toSend.c_str(), true);
-  Serial.print(boldGreen + "\n\n          ¡DEVICE ONLINE!" + fontReset);
-}
-
 void processIncomingMsg(String topic, String incoming)
 {
 
@@ -708,7 +699,6 @@ void sendToBroker()
     }
   }
 }
-
 
 void checkDeviceConnectivity()
 {
@@ -825,7 +815,7 @@ bool reconnect()
     // WE ARE CONNECTED TO THE MQTT BROKER
     Serial.print(boldGreen + "\n\n         Mqtt Client Connected :) " + fontReset);
     reportPresence();
-    delay(2000);
+
     client.subscribe((str_topic + "+/actdata").c_str());
     digitalWrite(CONNECTIVITY_STATUS, HIGH);
     return true;
@@ -888,6 +878,25 @@ bool getMqttCredentiales()
   }
 
   return false;
+}
+
+void reportPresence()
+{
+  /*
+   * Publico mensaje MQTT (retenido) avisando que el dispositivo se encuentra ONLINE.
+   * Esto se ejecuta cada vez que el dispoistivo se conecta al BROKER, ya sea la primera
+   * vez que se conecta o por cada reconexión (El el backend envio notificacion SOLO SI
+   * EL DISPOSITIVO CAMBIÓ DE ONLINE A OFFLINE o viceversa)
+   */
+
+  String root_topic = mqtt_data_doc["topic"];
+  String topic = root_topic + "dummy_var/status";
+  String toSend = "";
+  presence["online"]["status"] = "online";
+  presence["online"]["name"] = mqtt_data_doc["device_name"];
+  serializeJson(presence["online"], toSend);
+  client.publish(topic.c_str(), toSend.c_str(), true);
+  Serial.print(boldGreen + "\n\n          ¡DEVICE ONLINE!" + fontReset);
 }
 
 void print_stats()
