@@ -81,6 +81,8 @@ void detectarCambioCentral();
 void detectarCambioSirena();
 void detectarCambioInterior();
 void detectarCambioAberturas();
+
+// Functiones Definitions (AUXILIARES)
 void publicarCambio(byte lectura, byte index);
 String serializeMesageToSend(byte index, boolean lectura, boolean save);
 void incrementCounter(byte index);
