@@ -10,7 +10,7 @@
 #include <Ticker.h>
 
 // PINS
-#define CONNECTIVITY_STATUS 0215
+#define CONNECTIVITY_STATUS 02
 #define FLASH 16
 #define CENTRAL 14
 #define SIRENAS 12
