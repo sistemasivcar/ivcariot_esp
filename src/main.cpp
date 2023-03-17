@@ -20,7 +20,7 @@
 #define TX 02
 
 // CONFIG DEVICE
-String dId = String(ESP.getChipId());          // la voy a leer de la EEPROM justo antes de obtener las credenciales
+String dId = "";          // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_url = "http://app.ivcariot.com:3002/api/webhook/getdevicecredentials";
 // String webhook_url = "http://app.ivcariot.com:3002/api/webhook/getdevicecredentials";
@@ -101,9 +101,10 @@ void setup()
 {
   Serial.begin(115200);
   EEPROM.begin(512);
-  Serial.println("url_webwook" + webhook_url);
-
+  
   clear();
+  dId = String(ESP.getChipId());
+  Serial.print(boldGreen + "\nChipID -> " + fontReset + dId);
   pinMode(CONNECTIVITY_STATUS, OUTPUT);
   pinMode(FLASH, INPUT_PULLUP);
   pinMode(CENTRAL, INPUT);
