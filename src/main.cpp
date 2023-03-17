@@ -102,6 +102,8 @@ void setup()
   Serial.begin(921600);
   EEPROM.begin(512);
 
+  
+
   clear();
   dId = WIFI_getChipId();
   Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
