@@ -10,7 +10,7 @@
 #include <Ticker.h>
 
 // PINS
-#define CONNECTIVITY_STATUS 15
+#define CONNECTIVITY_STATUS 0215
 #define FLASH 16
 #define CENTRAL 14
 #define SIRENAS 12
@@ -20,14 +20,14 @@
 #define TX 02
 
 // CONFIG DEVICE
-String dId = "";          // la voy a leer de la EEPROM justo antes de obtener las credenciales
+String dId = String(ESP.getChipId());          // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_url = "http://app.ivcariot.com:3002/api/webhook/getdevicecredentials";
-//String webhook_url = "http://app.ivcariot.com:3002/api/webhook/getdevicecredentials";
+// String webhook_url = "http://app.ivcariot.com:3002/api/webhook/getdevicecredentials";
 
 // MQTT
 int mqtt_port = 1883;
-//const char *mqtt_host = "app.ivcariot.com";
+// const char *mqtt_host = "app.ivcariot.com";
 const char *mqtt_host = "app.ivcariot.com";
 
 // LECTURA DE SENSORES
@@ -54,24 +54,23 @@ long lastStats = 0;
 
 // Function Definitions (TEMPLATE)
 void clear();
-void checkWiFiConnection();
-bool getMqttCredentiales();
-void checkMqttConnection();
+void setupMqttClient();
+void setupWiFiManagerClient();
+void checkEnterAP();
+void initialize();
 void checkDeviceConnectivity();
+void checkWiFiConnection();
+void checkMqttConnection();
+bool getMqttCredentiales();
 bool reconnect();
+void reportPresence();
 void sendToBroker();
 void callback(char *topic, byte *payload, unsigned int length);
 void processIncomingMsg(String topic, String incoming);
 void print_stats();
-void reportPresence();
-void setupMqttClient();
-void setupWiFiManagerClient();
-void initialize();
-void checkEnterAP();
 void saveParamCallback();
 String getParam(String name);
 void changeStatusLed();
-
 
 // Functiones Definitions (AUXILIAR)
 void writeFlash(int addr, String valor);
@@ -85,10 +84,6 @@ void incrementCounter(byte index);
 
 // Functiones Definitions (APPLICATION)
 void processSensors();
-void detectarCambioCentral();
-void detectarCambioSirena();
-void detectarCambioAberturas();
-void detectarCambioInterior();
 void processActuators();
 void procesarComandosCentral();
 
@@ -100,7 +95,6 @@ DynamicJsonDocument presence(350);
 IoTicosSplitter splitter;
 WiFiManager wm;
 WiFiManagerParameter custom_param_whpassword;
-WiFiManagerParameter custom_param_dId;
 Ticker ticker;
 
 void setup()
@@ -161,92 +155,9 @@ void processSensors()
 
   long now = millis();
 
-  detectarCambioCentral();
-  detectarCambioSirena();
-  detectarCambioInterior();
-  detectarCambioAberturas();
+
 }
 
-void detectarCambioCentral()
-{
-
-  /*
-   * Detecto cambio de estado en el la entrada digital que me indica si
-   * la alarma está ACTIVADA o DESACTIVADA. Solo en los cambios de estado publico el
-   * mesaje como RETENIDO
-   *
-   * (LO MISMO HAGO PARA TODAS LAS DEMAS VARIABLES DIGITALES:
-   * SIRENA - INTERIOR - ABERTURAS)
-   *
-   */
-
-  central = digitalRead(CENTRAL);
-
-  if (central == 1 && getFlag(30) == 0)
-  {
-    publicarCambio(central, 0);
-    setFlag(30, central);
-  }
-
-  else if (central == 0 && getFlag(30) == 1)
-  {
-    publicarCambio(central, 0);
-    setFlag(30, central);
-  }
-}
-
-void detectarCambioSirena()
-{
-
-  sirena = digitalRead(SIRENAS);
-
-  if (sirena == 1 && getFlag(31) == 0)
-  {
-    publicarCambio(!sirena, 3);
-    setFlag(31, sirena);
-  }
-  else if (sirena == 0 && getFlag(31) == 1)
-  {
-    delay(3000);
-    if (digitalRead(SIRENAS) == 0)
-    {
-      publicarCambio(!sirena, 3);
-      setFlag(31, sirena);
-    }
-  }
-}
-
-void detectarCambioAberturas()
-{
-
-  abertura = digitalRead(ABERTURAS);
-  if (abertura == 1 && flag_aberturas == 0)
-  {
-    publicarCambio(abertura, 4);
-    flag_aberturas = 1;
-  }
-  else if (abertura == 0 && flag_aberturas == 1)
-  {
-    publicarCambio(abertura, 4);
-    flag_aberturas = 0;
-  }
-}
-
-void detectarCambioInterior()
-{
-
-  interior = digitalRead(INTERIOR);
-  if (interior == 1 && flag_interior == 0)
-  {
-    publicarCambio(interior, 5);
-    flag_interior = 1;
-  }
-  else if (interior == 0 && flag_interior == 1)
-  {
-    publicarCambio(interior, 5);
-    flag_interior = 0;
-  }
-}
 
 void processActuators()
 {
@@ -278,35 +189,22 @@ void procesarComandosCentral()
    */
 
   Serial.println(digitalRead(CENTRAL));
-  
 
   if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
   {
-    // ACTIVAR ALARMA
-    if(digitalRead(CENTRAL)==LOW){
-      digitalWrite(OUT, HIGH);
-      delay(1200);
-      digitalWrite(OUT, LOW);
-    }
-    
+
+    digitalWrite(CONNECTIVITY_STATUS, HIGH);
+
     mqtt_data_doc["variables"][1]["last"]["value"] = "";
-    
   }
 
   else if (mqtt_data_doc["variables"][2]["last"]["value"] == "desactivar")
   {
-    // DESACTIVAR ALARMA
-    if(digitalRead(CENTRAL)==HIGH){
-      digitalWrite(OUT, HIGH);
-      delay(1200);
-      digitalWrite(OUT, LOW);
+    digitalWrite(CONNECTIVITY_STATUS, LOW);
 
-    }
-    
     mqtt_data_doc["variables"][2]["last"]["value"] = "";
   }
 }
-
 
 /* *************************************** */
 
@@ -447,7 +345,6 @@ void incrementCounter(byte index)
   mqtt_data_doc["variables"][index]["counter"] = counter;
 }
 
-
 /* ************************************ */
 
 /* -------- TEMPLATE FUNCTIONS -------- */
@@ -489,13 +386,10 @@ void setupWiFiManagerClient()
   wm.setTitle("IVCAR IoT");
   wm.setCustomHeadElement("Device Managment - IvcarIoT");
 
-  const char *mqtt_did_input_str = "<br/><label for='deviceid'>DEVICE ID</label><input type='text' name='deviceid' placeholder='Enter your own dId'>";
   const char *mqtt_whpassword_input_str = "<br/><label for='whpasswordid'>DEVICE PASSWORD</label><input type='text' name='whpasswordid' placeholder='Enter the password'>";
 
-  new (&custom_param_dId) WiFiManagerParameter(mqtt_did_input_str);
   new (&custom_param_whpassword) WiFiManagerParameter(mqtt_whpassword_input_str);
 
-  wm.addParameter(&custom_param_dId);
   wm.addParameter(&custom_param_whpassword);
 
   wm.setSaveParamsCallback(saveParamCallback);
@@ -573,9 +467,7 @@ void saveParamCallback()
    * variables to use later
    */
 
-  dId = getParam("deviceid");
   webhook_pass = getParam("whpasswordid");
-  writeFlash(0, dId);
   writeFlash(15, webhook_pass);
 
   if (WiFi.status() == WL_CONNECTED)
@@ -876,11 +768,10 @@ bool getMqttCredentiales()
   ticker.attach(0.5, changeStatusLed);
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
 
-  dId = readFlash(0);
   webhook_pass = readFlash(15);
-  
+
   Serial.println(fontReset + "\nURL: " + webhook_url);
-  Serial.println("\ndId: " + dId + "\tpass: " + webhook_pass);
+  Serial.println("dId: " + dId + "\tpass: " + webhook_pass);
 
   String toSend = "dId=" + dId + "&whpassword=" + webhook_pass;
 
