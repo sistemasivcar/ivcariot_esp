@@ -19,7 +19,7 @@
 #define OUT 13
 
 // CONFIG DEVICE
-String dId = WIFI_getChipId();
+String dId = "";
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
 
@@ -103,7 +103,21 @@ void setup()
   EEPROM.begin(512);
 
   clear();
-  // Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
+  dId = WIFI_getChipId();
+; ESP32S-NODEMCU
+[env:nodemcu-32s]
+platform = espressif32
+board = nodemcu-32s 
+framework = arduino
+monitor_speed = 921600
+upload_speed = 921600
+monitor_raw=yes
+lib_deps = 
+	bblanchon/ArduinoJson@6.17.2
+	knolleary/PubSubClient@^2.8
+	https://github.com/tzapu/WiFiManager.git
+
+  Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
   pinMode(CONNECTIVITY_STATUS, OUTPUT);
   pinMode(FLASH, INPUT_PULLUP);
   pinMode(CENTRAL, INPUT);
