@@ -19,7 +19,7 @@
 #define OUT 13
 
 // CONFIG DEVICE
-String dId = "";          // la voy a leer de la EEPROM justo antes de obtener las credenciales
+String dId = WIFI_getChipId();
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_url = "https://app.ivcariot.com:3001/api/webhook/getdevicecredentials";
 
@@ -95,7 +95,6 @@ DynamicJsonDocument presence(350);
 IoTicosSplitter splitter;
 WiFiManager wm;
 WiFiManagerParameter custom_param_whpassword;
-WiFiManagerParameter custom_param_dId;
 Ticker ticker;
 
 void setup()
@@ -481,13 +480,10 @@ void setupWiFiManagerClient()
   wm.setTitle("IVCAR IoT");
   wm.setCustomHeadElement("Device Managment - IvcarIoT");
 
-  const char *mqtt_did_input_str = "<br/><label for='deviceid'>DEVICE ID</label><input type='text' name='deviceid' placeholder='Enter your own dId'>";
   const char *mqtt_whpassword_input_str = "<br/><label for='whpasswordid'>DEVICE PASSWORD</label><input type='text' name='whpasswordid' placeholder='Enter the password'>";
 
-  new (&custom_param_dId) WiFiManagerParameter(mqtt_did_input_str);
   new (&custom_param_whpassword) WiFiManagerParameter(mqtt_whpassword_input_str);
 
-  wm.addParameter(&custom_param_dId);
   wm.addParameter(&custom_param_whpassword);
 
   wm.setSaveParamsCallback(saveParamCallback);
@@ -565,9 +561,7 @@ void saveParamCallback()
    * variables to use later
    */
 
-  dId = getParam("deviceid");
   webhook_pass = getParam("whpasswordid");
-  writeFlash(0, dId, 15);
   writeFlash(15, webhook_pass, 15);
 }
 
@@ -841,10 +835,9 @@ bool getMqttCredentiales()
 
   Serial.print(underlinePurple + "\n\n\nGetting MQTT Credentials from WebHook" + fontReset + Purple + "  ⤵");
 
-  dId = readFlash(0, 15);
   webhook_pass = readFlash(15, 15);
   Serial.println(fontReset + "\nURL: " + webhook_url);
-  Serial.println("\ndId: " + dId + "\tpass: " + webhook_pass);
+  Serial.println("dId: " + dId + "\tpass: " + webhook_pass);
 
   String toSend = "dId=" + dId + "&whpassword=" + webhook_pass;
 
