@@ -106,7 +106,7 @@ void setup()
 
   clear();
   dId = WIFI_getChipId();
-  Serial.print(boldGreen + "\nChipID -> " + fontReset + WIFI_getChipId());
+  Serial.print(boldGreen + "\nChipID -> " + fontReset + dId);
   pinMode(CONNECTIVITY_STATUS, OUTPUT);
   pinMode(FLASH, INPUT_PULLUP);
   pinMode(CENTRAL, INPUT);
