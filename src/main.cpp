@@ -773,7 +773,6 @@ void checkMqttConnection()
     processSensors();
     // sendToBroker(); // no es necesario activar esta funcion para este dispositivo!
     // print_stats();
-    digitalWrite(CONNECTIVITY_STATUS, HIGH);
   }
 }
 
