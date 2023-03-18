@@ -20,7 +20,7 @@
 #define TX 02
 
 // CONFIG DEVICE
-String dId = "";          // la voy a leer de la EEPROM justo antes de obtener las credenciales
+String dId = "";       
 String webhook_pass = ""; // la voy a leer de la EEPROM justo antes de obtener las credenciales
 String webhook_url = "http://app.ivcariot.com:3002/api/webhook/getdevicecredentials";
 //String webhook_url = "http://app.ivcariot.com:3002/api/webhook/getdevicecredentials";
@@ -277,9 +277,7 @@ void procesarComandosCentral()
    * Cada uno manda un mensaje MQTT "activar" y "desactivar" que fueron configurados a la
    * hora de crear el widget en la plantilla asociada al dispositivo
    */
-
-  Serial.println(digitalRead(CENTRAL));
-  
+ 
 
   if (mqtt_data_doc["variables"][1]["last"]["value"] == "activar")
   {
@@ -771,7 +769,7 @@ void checkMqttConnection()
    *
    */
 
-  if (!client.connected() && WiFi.status() == WL_CONNECTED)
+  if (!client.connected())
   {
     long now = millis();
 
@@ -903,7 +901,6 @@ bool getMqttCredentiales()
     Serial.print(boldGreen + "\n\n         Mqtt Credentials Obtained Successfully :) " + fontReset);
     http.end();
     deserializeJson(mqtt_data_doc, response_body);
-    delay(3000);
     return true;
   }
 
