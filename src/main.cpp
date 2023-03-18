@@ -106,9 +106,12 @@ void setup()
 {
   Serial.begin(115200);
   EEPROM.begin(512);
-  Serial.println("url_webwook" + webhook_url);
 
   clear();
+    Serial.println("url_webwook" + webhook_url);
+  dId = String(ESP.getChipId());
+  Serial.print(boldGreen + "\nChipID -> " + fontReset + dId);
+
   pinMode(CONNECTIVITY_STATUS, OUTPUT);
   pinMode(FLASH, INPUT_PULLUP);
   pinMode(CENTRAL, INPUT);
